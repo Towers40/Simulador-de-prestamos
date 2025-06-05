@@ -4,10 +4,7 @@ import {
 } from 'recharts';
 
 function App() {
-  // loanAmount: El valor numérico puro para los cálculos.
   const [loanAmount, setLoanAmount] = useState(100000);
-  // displayLoanAmount: El valor string que se muestra en el input, con formato.
-  // Inicializamos con el valor formateado
   const [displayLoanAmount, setDisplayLoanAmount] = useState(
     new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(100000)
   );
@@ -19,15 +16,12 @@ function App() {
   const [chartData, setChartData] = useState([]);
 
   const tableRef = useRef(null);
-  const loanAmountInputRef = useRef(null); // Nuevo ref para el input del monto del préstamo
+  const loanAmountInputRef = useRef(null);
 
-  // Efecto para recalcular la amortización cuando cambian los inputs de cálculo.
   useEffect(() => {
     calculateAmortization();
   }, [loanAmount, annualInterestRate, loanTerm, loanTermUnit]);
 
-  // Efecto para mantener 'displayLoanAmount' y el valor del DOM input sincronizados con 'loanAmount'.
-  // Este useEffect es crucial para cuando loanAmount cambia programáticamente (no por teclear).
   useEffect(() => {
     let formattedValue = '';
     if (loanAmount !== '' && !isNaN(parseFloat(loanAmount))) {
@@ -35,15 +29,13 @@ function App() {
     }
 
     setDisplayLoanAmount(formattedValue);
-    // ¡IMPORTANTE!: Actualiza directamente el valor del DOM si el ref existe.
-    // Esto asegura que el input refleje el estado formateado cuando no está en foco.
     if (loanAmountInputRef.current && document.activeElement !== loanAmountInputRef.current) {
       loanAmountInputRef.current.value = formattedValue;
     }
-  }, [loanAmount]); // Depende de loanAmount
+  }, [loanAmount]);
 
   const calculateAmortization = () => {
-    const principal = parseFloat(loanAmount); // Usamos loanAmount directamente para los cálculos.
+    const principal = parseFloat(loanAmount);
     const annualRate = parseFloat(annualInterestRate) / 100;
     let months = parseInt(loanTerm);
 
@@ -102,63 +94,60 @@ function App() {
     }
   };
 
-  // Función para formatear moneda (usada en display de resúmenes y tablas)
   const formatCurrency = (value) => {
     const numValue = parseFloat(value);
     if (isNaN(numValue)) {
       return '$0';
     }
-    // Modificación aquí: Establecer minimumFractionDigits y maximumFractionDigits a 0
     return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(numValue);
   };
 
-  // Función para limpiar el input: solo permite dígitos y un punto decimal.
   const cleanNumberInput = (value) => {
     return value.replace(/[^0-9.]/g, '');
   };
 
   return (
-    <div className={`min-h-screen bg-gray-50 flex flex-col items-center py-12 px-4 font-sans text-main-text`}>
-      <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-10 text-center">
+    <div className="min-h-screen bg-gray-50 flex flex-col py-12 px-4 font-sans text-main-text w-screen">
+      <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-10 text-center mx-auto max-w-screen-xl">
         Simulador de Préstamos
       </h1>
 
-      {/* Bloque de resumen superior */}
-      <div className={`bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-4xl mb-10 border border-gray-100`}>
-        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 text-center`}>
+      {/* Bloque de resumen superior - Mantiene su centrado y ancho máximo */}
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-4xl mx-auto mb-10 border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 text-center">
           {/* Cuota Mensual */}
-          <div className={`bg-primary-dark-blue p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center`}>
+          <div className="bg-primary-dark-blue p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1 whitespace-nowrap">Cuota Mensual:</p>
             <p className="text-lg md:text-xl lg:text-2xl font-bold whitespace-nowrap">{formatCurrency(amortizationSchedule[0]?.monthlyPayment || 0)}</p>
           </div>
           {/* Número de pagos */}
-          <div className={`bg-primary-dark-blue p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center`}>
+          <div className="bg-primary-dark-blue p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1 whitespace-nowrap">Número de pagos:</p>
             <p className="text-lg md:text-xl lg:text-2xl font-bold whitespace-nowrap">
               {loanTermUnit === 'years' ? loanTerm * 12 : loanTerm}
             </p>
           </div>
           {/* Interés a Pagar */}
-          <div className={`bg-primary-dark-blue p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center`}>
+          <div className="bg-primary-dark-blue p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1 whitespace-nowrap">Interés Total:</p>
             <p className="text-lg md:text-xl lg:text-2xl font-bold whitespace-nowrap">
               {formatCurrency(amortizationSchedule.reduce((sum, row) => sum + row.interestPayment, 0))}
             </p>
           </div>
           {/* Montante Original */}
-          <div className={`bg-primary-dark-blue p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center`}>
+          <div className="bg-primary-dark-blue p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1 whitespace-nowrap">Monto Original:</p>
             <p className="text-lg md:text-xl lg:text-2xl font-bold whitespace-nowrap">{formatCurrency(loanAmount)}</p>
           </div>
         </div>
       </div>
 
-      {/* Inputs de la calculadora - Contenedor con fondo azul claro, centrado y más corto */}
-      <div className={`bg-light-blue-bg p-8 md:p-10 rounded-3xl shadow-xl w-full max-w-md mx-auto mb-10 border border-blue-200`}>
+      {/* Inputs de la calculadora - Mantiene su centrado y ancho máximo */}
+      <div className="bg-light-blue-bg p-8 md:p-10 rounded-3xl shadow-xl w-full max-w-md mx-auto mb-10 border border-blue-200">
         <div className="grid grid-cols-1 gap-6 md:gap-8 mb-6">
           {/* Monto del Préstamo con formato */}
           <div>
-            <label htmlFor="loanAmount" className={`block text-light-gray-text text-sm font-semibold mb-2`}>
+            <label htmlFor="loanAmount" className="block text-light-gray-text text-sm font-semibold mb-2">
               Monto del Préstamo:
             </label>
             <div className="relative">
@@ -166,34 +155,29 @@ function App() {
               <input
                 type="text"
                 id="loanAmount"
-                ref={loanAmountInputRef} // Asigna el ref al input
+                ref={loanAmountInputRef}
                 className="w-full pl-8 pr-4 py-2 border border-blue-300 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-gray-800 text-right"
-                // REMOVIDO: value={displayLoanAmount} // NO CONTROLADO por React durante la escritura
-                defaultValue={displayLoanAmount} // Usamos defaultValue para la inicialización (solo la primera vez)
+                defaultValue={displayLoanAmount}
                 onChange={(e) => {
                   const rawValue = e.target.value;
                   const cleanNumString = cleanNumberInput(rawValue);
 
-                  // Actualiza el valor del DOM directamente (Safari friendly)
                   if (loanAmountInputRef.current) {
                     loanAmountInputRef.current.value = rawValue;
                   }
 
-                  // Actualiza loanAmount (el valor numérico real para cálculos)
                   if (cleanNumString !== '') {
                     setLoanAmount(parseFloat(cleanNumString));
                   } else {
-                    setLoanAmount(''); // Si está vacío, guardar vacío para evitar NaN.
+                    setLoanAmount('');
                   }
                 }}
                 onBlur={() => {
-                  // Cuando el input pierde el foco, aplicar el formato final
                   let formattedValue = '';
                   if (loanAmount !== '' && !isNaN(parseFloat(loanAmount))) {
                     formattedValue = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(parseFloat(loanAmount));
                   }
 
-                  // Sincroniza displayLoanAmount y el valor del DOM input
                   setDisplayLoanAmount(formattedValue);
                   if (loanAmountInputRef.current) {
                     loanAmountInputRef.current.value = formattedValue;
@@ -205,7 +189,7 @@ function App() {
             </div>
           </div>
           <div>
-            <label htmlFor="annualInterestRate" className={`block text-light-gray-text text-sm font-semibold mb-2`}>
+            <label htmlFor="annualInterestRate" className="block text-light-gray-text text-sm font-semibold mb-2">
               Tasa de Interés Anual (%):
             </label>
             <input
@@ -220,7 +204,7 @@ function App() {
           </div>
           {/* Campo de Plazo con selector de unidad */}
           <div>
-            <label htmlFor="loanTerm" className={`block text-light-gray-text text-sm font-semibold mb-2`}>
+            <label htmlFor="loanTerm" className="block text-light-gray-text text-sm font-semibold mb-2">
               Plazo:
             </label>
             <div className="flex items-center gap-2">
@@ -253,15 +237,13 @@ function App() {
       </div>
 
 
-      {/* Gráfico de Amortización */}
+      {/* Gráfico de Amortización - Ahora debería estirarse al ancho del viewport */}
       {amortizationSchedule.length > 0 && (
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-4xl mb-10 border border-gray-100">
-          <h2 className={`text-xl md:text-2xl font-bold text-center text-light-gray-text mb-6`}>Visualización de los pagos mes a mes</h2>
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full mb-10 border border-gray-100">
+          <h2 className="text-xl md:text-2xl font-bold text-center text-light-gray-text mb-6">Visualización de los pagos mes a mes</h2>
           <ResponsiveContainer width="100%" aspect={2}>
             <BarChart
               data={chartData}
-              width={500}
-              height={900}
               margin={{
                 top: 25,
                 right: 10,
@@ -289,13 +271,14 @@ function App() {
         </div>
       )}
 
-      {/* Tabla de Amortización */}
+      {/* Tabla de Amortización - Con altura extendida */}
       {amortizationSchedule.length > 0 && (
-        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-4xl border border-gray-100">
-          <h2 className={`text-xl md:text-2xl font-bold text-center text-light-gray-text mb-6`}>Tabla de Amortización Detallada</h2>
-          <div className="overflow-x-auto overflow-y-auto max-h-96 relative rounded-lg border border-gray-200">
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full border border-gray-100">
+          <h2 className="text-xl md:text-2xl font-bold text-center text-light-gray-text mb-6">Tabla de Amortización Detallada</h2>
+          {/* CAMBIO CLAVE AQUÍ: max-h-128 cambiado a max-h-[900px] para ~20 filas */}
+          <div className="overflow-x-auto overflow-y-auto max-h-[900px] relative rounded-lg border border-gray-200">
             <table className="min-w-full divide-y divide-gray-100">
-              <thead className={`bg-primary-dark-blue text-white sticky top-0 z-10 shadow-sm`}>
+              <thead className="bg-primary-dark-blue text-white sticky top-0 z-10 shadow-sm">
                 <tr>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider rounded-tl-lg">
                     Mes
