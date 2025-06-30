@@ -170,6 +170,9 @@ function App() {
       let regularPrincipalPaymentThisMonth = originalMonthlyPayment - interestPaymentThisMonth;
       let extraPaymentAppliedThisMonth = 0; // Initialize to 0 for each month
 
+      // FIX: Declare actualMonthlyPaymentRecorded inside the loop scope
+      let actualMonthlyPaymentRecorded;
+
       // Apply any extraordinary payments scheduled for the current month
       while (extraPaymentIdx < sortedExtraPayments.length && sortedExtraPayments[extraPaymentIdx].month === i) {
         const ep = sortedExtraPayments[extraPaymentIdx];
