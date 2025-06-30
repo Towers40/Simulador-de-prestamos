@@ -14,203 +14,271 @@ function App() {
   const [loanTermUnit, setLoanTermUnit] = useState('years');
   const [amortizationSchedule, setAmortizationSchedule] = useState([]);
   const [chartData, setChartData] = useState([]);
+  const [totalInterestSaved, setTotalInterestSaved] = useState(0);
 
-  // State for extraordinary payments
-  const [extraPayments, setExtraPayments] = useState([]); // Stores objects like { id: unique, amount: number, month: number }
-  const [newExtraPaymentAmount, setNewExtraPaymentAmount] = useState('');
+  // Estado para los abonos extraordinarios
+  const [extraPayments, setExtraPayments] = useState([]); // Almacena objetos como { id: unique, amount: number, month: number }
+  const [newExtraPaymentAmount, setNewExtraPaymentAmount] = useState(0); // Ahora almacena un número, 0 si está vacío
+  const [displayNewExtraPaymentAmount, setDisplayNewExtraPaymentAmount] = useState(''); // Para la visualización formateada en el input
   const [newExtraPaymentMonth, setNewExtraPaymentMonth] = useState('');
 
-  const [message, setMessage] = useState(''); // For custom alert messages
+  const [message, setMessage] = useState(''); // Para mensajes de alerta personalizados
 
-  const tableRef = useRef(null);
-  const loanAmountInputRef = useRef(null);
+  // Se eliminaron las referencias a useRef para los inputs ya que ahora son componentes controlados.
 
-  // Recalculate amortization whenever relevant inputs or extra payments change
+  // Recalcular la amortización cada vez que los inputs relevantes o los abonos extra cambian
   useEffect(() => {
     calculateAmortization();
   }, [loanAmount, annualInterestRate, loanTerm, loanTermUnit, extraPayments]);
 
-  // Effect to format and display loan amount
+  // Efecto para formatear y mostrar el monto del préstamo cuando cambia el estado numérico `loanAmount`
   useEffect(() => {
-    let formattedValue = '';
-    if (loanAmount !== '' && !isNaN(parseFloat(loanAmount))) {
-      formattedValue = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(parseFloat(loanAmount));
-    }
-
-    setDisplayLoanAmount(formattedValue);
-    // Only update input value if it's not currently focused (to prevent cursor jumping)
-    if (loanAmountInputRef.current && document.activeElement !== loanAmountInputRef.current) {
-      loanAmountInputRef.current.value = formattedValue;
+    if (typeof loanAmount === 'number' && !isNaN(loanAmount)) {
+      setDisplayLoanAmount(new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(loanAmount));
+    } else {
+      setDisplayLoanAmount(''); // Si no es un número válido, el input se muestra vacío
     }
   }, [loanAmount]);
 
-  /**
-   * Calculates the loan amortization schedule, incorporating extraordinary payments.
-   */
-  const calculateAmortization = () => {
-    const principal = parseFloat(loanAmount);
-    const annualRate = parseFloat(annualInterestRate) / 100;
-    let totalMonths = parseInt(loanTerm);
-
-    if (loanTermUnit === 'years') {
-      totalMonths = totalMonths * 12;
-    }
-
-    // Input validation
-    if (isNaN(principal) || isNaN(annualRate) || isNaN(totalMonths) || principal <= 0 || totalMonths <= 0) {
-      setAmortizationSchedule([]);
-      setChartData([]);
-      return;
-    }
-
-    const monthlyRate = annualRate / 12;
-    let monthlyPayment = 0;
-
-    // Calculate initial monthly payment (PITI)
-    if (monthlyRate === 0) {
-      // Handle zero interest rate
-      monthlyPayment = principal / totalMonths;
+  // Efecto para formatear y mostrar el nuevo monto de abono extra cuando cambia el estado numérico `newExtraPaymentAmount`
+  useEffect(() => {
+    if (typeof newExtraPaymentAmount === 'number' && !isNaN(newExtraPaymentAmount)) {
+      setDisplayNewExtraPaymentAmount(new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(newExtraPaymentAmount));
     } else {
-      // Standard amortization formula
-      monthlyPayment = principal * (monthlyRate / (1 - Math.pow(1 + monthlyRate, -totalMonths)));
+      setDisplayNewExtraPaymentAmount(''); // Si no es un número válido, el input se muestra vacío
     }
+  }, [newExtraPaymentAmount]);
 
-    let remainingBalance = principal;
-    const schedule = [];
-    const dataForChart = [];
-
-    // Sort extra payments by month to ensure they are applied in the correct sequence
-    const sortedExtraPayments = [...extraPayments].sort((a, b) => a.month - b.month);
-    let currentExtraPaymentIndex = 0;
-
-    // Loop through months, breaking when the loan is fully paid or a safe upper limit is reached
-    // Loop up to 2x the original term to allow for very long amortizations if needed
-    for (let i = 1; i <= totalMonths * 2 + 1; i++) {
-      // Break if remaining balance is effectively zero (due to floating point inaccuracies, check a small range)
-      if (remainingBalance <= 0.01 && remainingBalance >= -0.01) {
-        break;
-      }
-
-      // Apply any extraordinary payments scheduled for the current month
-      while (currentExtraPaymentIndex < sortedExtraPayments.length && sortedExtraPayments[currentExtraPaymentIndex].month === i) {
-        const ep = sortedExtraPayments[currentExtraPaymentIndex];
-        if (remainingBalance > 0 && ep.amount > 0) {
-          // Reduce the remaining balance by the extra payment amount
-          remainingBalance = Math.max(0, remainingBalance - ep.amount);
-        }
-        currentExtraPaymentIndex++;
-        // If loan is paid off immediately after an extra payment, break from inner loop
-        if (remainingBalance <= 0.01 && remainingBalance >= -0.01) {
-          break;
-        }
-      }
-
-      // If loan is paid off after applying extra payments for this month, break from outer loop
-      if (remainingBalance <= 0.01 && remainingBalance >= -0.01) {
-        break;
-      }
-
-      // Calculate interest for the current month based on the remaining balance
-      const interestPayment = remainingBalance * monthlyRate;
-      let principalPayment = monthlyPayment - interestPayment;
-      let actualMonthlyPaymentForRecord = monthlyPayment; // This will be the amount recorded for this month
-
-      // Adjust for the final payment: if remaining balance is less than the calculated principal payment,
-      // it means this is the last payment and we only need to pay the remaining balance plus interest.
-      if (remainingBalance < principalPayment) {
-        principalPayment = remainingBalance; // The actual principal paid is just the remaining balance
-        actualMonthlyPaymentForRecord = principalPayment + interestPayment; // The actual final payment amount
-        remainingBalance = 0; // Set remaining balance to zero for this entry
-      } else {
-        remainingBalance -= principalPayment;
-      }
-
-      // Ensure principal payment is not negative in the schedule if monthly payment doesn't cover interest
-      // (though this scenario should ideally not happen with valid initial calculations)
-      if (principalPayment < 0) {
-        principalPayment = 0;
-      }
-
-      // Add the current month's payment details to the schedule
-      schedule.push({
-        month: i,
-        monthlyPayment: actualMonthlyPaymentForRecord,
-        principalPayment: principalPayment,
-        interestPayment: interestPayment,
-        remainingBalance: remainingBalance,
-      });
-
-      // Prepare data for the chart
-      dataForChart.push({
-        month: i,
-        'Pago a Capital': principalPayment,
-        'Pago de Interés': interestPayment,
-        'Saldo Restante': remainingBalance,
-      });
+  /**
+   * Limpia una cadena para que contenga solo números y un único punto decimal (para parseFloat).
+   * Asume que la entrada de usuario usará coma como separador decimal si es el caso.
+   * @param {string} value - La cadena de entrada.
+   * @returns {string} La cadena numérica limpia, con punto como decimal separator.
+   */
+  const cleanNumberInput = (value) => {
+    // Eliminar todo lo que no sea dígito o coma
+    let cleaned = value.replace(/[^0-9,]/g, '');
+    // Permitir solo una coma (asumida como separador decimal para es-CO)
+    const parts = cleaned.split(',');
+    if (parts.length > 2) {
+      cleaned = parts[0] + ',' + parts.slice(1).join('');
     }
-
-    setAmortizationSchedule(schedule);
-    setChartData(dataForChart);
-
-    // Scroll to top of table if it exists
-    if (tableRef.current) {
-      tableRef.current.scrollTop = 0;
-    }
+    // Reemplazar coma con punto para que parseFloat funcione correctamente
+    return cleaned.replace(',', '.');
   };
 
   /**
-   * Formats a number as a Colombian Pesos currency string.
-   * @param {number|string} value - The number to format.
-   * @returns {string} The formatted currency string.
+   * Formatea un número como una cadena de moneda de Pesos Colombianos.
+   * @param {number|string} value - El número a formatear.
+   * @returns {string} La cadena de moneda formateada.
    */
   const formatCurrency = (value) => {
     let numValue = parseFloat(value);
     if (isNaN(numValue)) {
-      numValue = 0; // Default to 0 for display if invalid
+      numValue = 0; // Por defecto 0 para la visualización si es inválido
     }
     return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(numValue);
   };
 
   /**
-   * Cleans a string to contain only numbers and a single decimal point.
-   * @param {string} value - The input string.
-   * @returns {string} The cleaned numeric string.
+   * Calcula el interés total para un plan de amortización estándar sin abonos extra.
+   * Se utiliza para establecer una línea de base para el interés ahorrado.
    */
-  const cleanNumberInput = (value) => {
-    return value.replace(/[^0-9.]/g, '');
+  const calculateTotalInterestWithoutExtraPayments = (principal, annualRatePercentage, totalMonths) => {
+    if (isNaN(principal) || principal <= 0 || isNaN(annualRatePercentage) || totalMonths <= 0) {
+      return 0;
+    }
+
+    const annualRate = annualRatePercentage / 100; // Convertir a decimal
+    const monthlyRate = annualRate / 12;
+    let monthlyPayment;
+
+    if (monthlyRate === 0) {
+      monthlyPayment = principal / totalMonths;
+    } else {
+      monthlyPayment = principal * (monthlyRate / (1 - Math.pow(1 + monthlyRate, -totalMonths)));
+    }
+
+    let remainingBalance = principal;
+    let totalInterest = 0;
+
+    for (let i = 1; i <= totalMonths; i++) {
+      if (remainingBalance <= 0.01) break; // Si el saldo es casi cero, se considera pagado
+
+      const interestPayment = remainingBalance * monthlyRate;
+      let principalPayment = monthlyPayment - interestPayment;
+
+      if (principalPayment < 0) {
+        principalPayment = 0;
+      }
+
+      if (remainingBalance < principalPayment) {
+        principalPayment = remainingBalance;
+      }
+
+      totalInterest += interestPayment;
+      remainingBalance -= principalPayment;
+    }
+    return totalInterest;
+  };
+
+
+  /**
+   * Calcula el plan de amortización del préstamo, incorporando abonos extraordinarios.
+   */
+  const calculateAmortization = () => {
+    const principal = parseFloat(loanAmount);
+    const annualRate = parseFloat(annualInterestRate) / 100;
+    let initialTotalMonths = parseInt(loanTerm);
+
+    if (loanTermUnit === 'years') {
+      initialTotalMonths = initialTotalMonths * 12;
+    }
+
+    // Validación de entradas
+    if (isNaN(principal) || isNaN(annualRate) || isNaN(initialTotalMonths) || principal <= 0 || initialTotalMonths <= 0) {
+      setAmortizationSchedule([]);
+      setChartData([]);
+      setTotalInterestSaved(0);
+      return;
+    }
+
+    const monthlyRate = annualRate / 12;
+    let originalMonthlyPayment;
+
+    if (monthlyRate === 0) {
+      originalMonthlyPayment = principal / initialTotalMonths;
+    } else {
+      originalMonthlyPayment = principal * (monthlyRate / (1 - Math.pow(1 + monthlyRate, -initialTotalMonths)));
+    }
+
+    // Calcular el interés total de referencia sin abonos extra
+    const baselineTotalInterest = calculateTotalInterestWithoutExtraPayments(principal, annualInterestRate, initialTotalMonths);
+
+
+    let currentRemainingBalance = principal;
+    const schedule = [];
+    const dataForChart = [];
+    let currentTotalInterestPaid = 0;
+
+    // Ordenar los abonos extra por mes para asegurar que se apliquen en la secuencia correcta
+    const sortedExtraPayments = [...extraPayments].sort((a, b) => a.month - b.month);
+    let extraPaymentIdx = 0;
+
+    // Bucle a través de los meses. El bucle máximo es 2 veces el plazo inicial para manejar casos extremos.
+    // El bucle continúa hasta que el saldo sea efectivamente cero.
+    for (let i = 1; i <= initialTotalMonths * 2 + 1 && currentRemainingBalance > 0.01; i++) {
+      let interestPaymentThisMonth = currentRemainingBalance * monthlyRate;
+      let regularPrincipalPaymentThisMonth = originalMonthlyPayment - interestPaymentThisMonth;
+      let extraPaymentAppliedThisMonth = 0; // Inicializar a 0 para cada mes
+
+      // Aplicar cualquier abono extraordinario programado para el mes actual
+      while (extraPaymentIdx < sortedExtraPayments.length && sortedExtraPayments[extraPaymentIdx].month === i) {
+        const ep = sortedExtraPayments[extraPaymentIdx];
+        if (currentRemainingBalance > 0.01) { // Solo aplicar si aún hay saldo
+          extraPaymentAppliedThisMonth += ep.amount;
+          currentRemainingBalance = Math.max(0, currentRemainingBalance - ep.amount);
+        }
+        extraPaymentIdx++;
+        if (currentRemainingBalance <= 0.01) break; // Si el préstamo se paga inmediatamente después de un abono extra, salir
+      }
+
+      // Si el préstamo ya fue pagado por abonos extra, o el saldo restante es muy pequeño
+      if (currentRemainingBalance <= 0.01) {
+        interestPaymentThisMonth = 0;
+        regularPrincipalPaymentThisMonth = 0;
+        // Si no hay saldo, el pago mensual registrado es 0
+        actualMonthlyPaymentRecorded = 0;
+      } else {
+        // Recalcular el interés basado en el saldo después de los abonos extra (si los hubo)
+        interestPaymentThisMonth = currentRemainingBalance * monthlyRate;
+        regularPrincipalPaymentThisMonth = originalMonthlyPayment - interestPaymentThisMonth;
+
+        // Ajustar para el pago final
+        if (regularPrincipalPaymentThisMonth > currentRemainingBalance + 0.01) {
+          regularPrincipalPaymentThisMonth = currentRemainingBalance;
+          actualMonthlyPaymentRecorded = regularPrincipalPaymentThisMonth + interestPaymentThisMonth;
+          currentRemainingBalance = 0;
+        } else {
+          actualMonthlyPaymentRecorded = originalMonthlyPayment; // El pago mensual es el original
+          currentRemainingBalance -= regularPrincipalPaymentThisMonth;
+        }
+
+        // Asegurarse de que no haya valores negativos en los pagos
+        if (regularPrincipalPaymentThisMonth < 0) regularPrincipalPaymentThisMonth = 0;
+        if (interestPaymentThisMonth < 0) interestPaymentThisMonth = 0;
+      }
+
+      currentTotalInterestPaid += interestPaymentThisMonth;
+
+      // Agregar al schedule y a los datos del gráfico
+      schedule.push({
+        month: i,
+        monthlyPayment: actualMonthlyPaymentRecorded,
+        principalPayment: regularPrincipalPaymentThisMonth, // Este es el capital de pago mensual regular
+        interestPayment: interestPaymentThisMonth,
+        remainingBalance: currentRemainingBalance,
+        extraPaymentApplied: extraPaymentAppliedThisMonth > 0 ? extraPaymentAppliedThisMonth : null,
+      });
+
+      dataForChart.push({
+        month: i,
+        'Pago a Capital (Regular)': regularPrincipalPaymentThisMonth,
+        'Pago de Interés': interestPaymentThisMonth,
+        'Abono Extraordinario': extraPaymentAppliedThisMonth > 0 ? extraPaymentAppliedThisMonth : 0, // Asegurarse de que sea 0 si no hay abono extra
+        'Saldo Restante': currentRemainingBalance,
+      });
+
+      // Romper el bucle si el saldo está pagado.
+      if (currentRemainingBalance <= 0.01) break;
+    }
+
+    setAmortizationSchedule(schedule);
+    setChartData(dataForChart);
+    setTotalInterestSaved(baselineTotalInterest - currentTotalInterestPaid);
   };
 
   /**
-   * Handles adding a new extraordinary payment to the list.
+   * Maneja la adición de un nuevo abono extraordinario a la lista.
    */
   const handleAddExtraPayment = () => {
-    const amount = parseFloat(cleanNumberInput(newExtraPaymentAmount));
+    // Usar el estado numérico para el monto
+    const amount = newExtraPaymentAmount; // newExtraPaymentAmount ya es un número
     const month = parseInt(newExtraPaymentMonth);
+    let initialTotalMonths = parseInt(loanTerm);
+    if (loanTermUnit === 'years') {
+      initialTotalMonths = initialTotalMonths * 12;
+    }
 
-    // Input validation for extra payment
-    if (isNaN(amount) || amount <= 0 || isNaN(month) || month <= 0) {
-      setMessage('Por favor, ingresa un monto y mes válidos para el abono extraordinario.');
+    // Validación de entrada para el abono extra
+    if (isNaN(amount) || amount <= 0) {
+      setMessage('Por favor, ingresa un monto válido para el abono extraordinario.');
+      return;
+    }
+    // Permitir abonos hasta un período razonable más allá del plazo inicial (ej. el doble del plazo)
+    if (isNaN(month) || month <= 0 || month > initialTotalMonths * 2 + 1) {
+      setMessage(`Por favor, ingresa un mes válido (entre 1 y ${initialTotalMonths * 2 + 1}).`);
       return;
     }
 
     setExtraPayments(prev => [...prev, { id: Date.now(), amount, month }]);
-    setNewExtraPaymentAmount('');
+    setNewExtraPaymentAmount(0); // Limpiar el estado numérico para la próxima entrada
     setNewExtraPaymentMonth('');
-    setMessage(''); // Clear any previous message
+    setMessage(''); // Limpiar cualquier mensaje previo
   };
 
   /**
-   * Handles removing an extraordinary payment from the list.
-   * @param {number} idToRemove - The unique ID of the payment to remove.
+   * Maneja la eliminación de un abono extraordinario de la lista.
+   * @param {number} idToRemove - El ID único del pago a eliminar.
    */
   const handleRemoveExtraPayment = (idToRemove) => {
     setExtraPayments(prev => prev.filter(ep => ep.id !== idToRemove));
-    setMessage(''); // Clear any previous message
+    setMessage(''); // Limpiar cualquier mensaje previo
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col py-12 px-4 font-sans text-gray-800 w-screen">
-      {/* Custom message display for validation errors */}
+      {/* Visualización de mensajes de validación personalizados */}
       {message && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl relative mb-4 max-w-md mx-auto text-center" role="alert">
           <span className="block sm:inline">{message}</span>
@@ -224,35 +292,47 @@ function App() {
         Simulador de Préstamos
       </h1>
 
-      {/* Summary Block */}
+      {/* Bloque de Resumen */}
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-4xl mx-auto mb-10 border border-gray-100">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 text-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 text-center">
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
-            <p className="text-sm md:text-base opacity-80 mb-1 whitespace-nowrap">Cuota Mensual:</p>
-            <p className="text-lg md:text-xl lg:text-2xl font-bold whitespace-nowrap">{formatCurrency(amortizationSchedule[0]?.monthlyPayment || 0)}</p>
+            <p className="text-sm md:text-base opacity-80 mb-1">Cuota Mensual:</p>
+            {/* Ajuste de tamaño de fuente para mejorar el ajuste */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg font-bold">{formatCurrency(amortizationSchedule[0]?.monthlyPayment || 0)}</p>
           </div>
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
-            <p className="text-sm md:text-base opacity-80 mb-1 whitespace-nowrap">Número de pagos:</p>
-            <p className="text-lg md:text-xl lg:text-2xl font-bold whitespace-nowrap">
+            <p className="text-sm md:text-base opacity-80 mb-1">Número de pagos:</p>
+            {/* Ajuste de tamaño de fuente para mejorar el ajuste */}
+            <p className="text-base sm:text-lg md:text-xl font-bold">
               {amortizationSchedule.length}
             </p>
           </div>
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
-            <p className="text-sm md:text-base opacity-80 mb-1 whitespace-nowrap">Interés Total:</p>
-            <p className="text-lg md:text-xl lg:text-2xl font-bold whitespace-nowrap">
+            <p className="text-sm md:text-base opacity-80 mb-1">Interés Total Pagado:</p>
+            {/* Ajuste de tamaño de fuente para mejorar el ajuste */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg font-bold">
               {formatCurrency(amortizationSchedule.reduce((sum, row) => sum + row.interestPayment, 0))}
             </p>
           </div>
+          {/* Nueva casilla para el Interés Ahorrado */}
+          <div className="bg-green-600 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
+            <p className="text-sm md:text-base opacity-80 mb-1">Interés Total Ahorrado:</p>
+            {/* Ajuste de tamaño de fuente para mejorar el ajuste */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg font-bold">
+              {formatCurrency(totalInterestSaved)}
+            </p>
+          </div>
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
-            <p className="text-sm md:text-base opacity-80 mb-1 whitespace-nowrap">Monto Original:</p>
-            <p className="text-lg md:text-xl lg:text-2xl font-bold whitespace-nowrap">{formatCurrency(loanAmount)}</p>
+            <p className="text-sm md:text-base opacity-80 mb-1">Monto Original:</p>
+            {/* Ajuste de tamaño de fuente para mejorar el ajuste */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg font-bold">{formatCurrency(loanAmount)}</p>
           </div>
         </div>
       </div>
 
-      {/* Calculator Inputs and Extra Payments Section */}
+      {/* Sección de Inputs de la Calculadora y Abonos Extra */}
       <div className="flex flex-col lg:flex-row gap-6 md:gap-10 w-full max-w-5xl mx-auto mb-10">
-        {/* Main Calculator Inputs */}
+        {/* Inputs principales de la calculadora */}
         <div className="bg-blue-100 p-8 md:p-10 rounded-3xl shadow-xl w-full lg:w-1/2 border border-blue-200">
           <h2 className="text-xl md:text-2xl font-bold text-center text-gray-700 mb-6">Detalles del Préstamo</h2>
           <div className="grid grid-cols-1 gap-6 md:gap-8 mb-6">
@@ -263,40 +343,26 @@ function App() {
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-bold">$</span>
                 <input
-                  type="text"
+                  type="text" // Mantener como texto para controlar el formato
                   id="loanAmount"
-                  ref={loanAmountInputRef}
                   className="w-full pl-8 pr-4 py-2 border border-blue-300 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-gray-800 text-right"
-                  defaultValue={displayLoanAmount}
+                  value={displayLoanAmount} // Componente controlado
                   onChange={(e) => {
                     const rawValue = e.target.value;
-                    const cleanNumString = cleanNumberInput(rawValue);
-
-                    // Update the input field directly for immediate visual feedback
-                    if (loanAmountInputRef.current) {
-                      loanAmountInputRef.current.value = rawValue;
-                    }
-
-                    // Set state with the cleaned number
-                    if (cleanNumString !== '') {
-                      setLoanAmount(parseFloat(cleanNumString));
-                    } else {
-                      setLoanAmount('');
-                    }
+                    setDisplayLoanAmount(rawValue); // Actualizar el estado de display con la entrada cruda del usuario
+                    const cleanNum = cleanNumberInput(rawValue);
+                    setLoanAmount(cleanNum !== '' ? parseFloat(cleanNum) : 0); // Actualizar el estado numérico
                   }}
                   onBlur={() => {
-                    // Reformat on blur to ensure consistent display
-                    let formattedValue = '';
-                    if (loanAmount !== '' && !isNaN(parseFloat(loanAmount))) {
-                      formattedValue = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(parseFloat(loanAmount));
-                    }
-                    setDisplayLoanAmount(formattedValue);
-                    if (loanAmountInputRef.current) {
-                      loanAmountInputRef.current.value = formattedValue;
+                    // Al perder el foco, forzar el formato basado en el estado numérico actual
+                    if (typeof loanAmount === 'number' && !isNaN(loanAmount)) {
+                      setDisplayLoanAmount(new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(loanAmount));
+                    } else {
+                      setDisplayLoanAmount('');
                     }
                   }}
                   inputMode="numeric"
-                  pattern="[0-9]*"
+                  pattern="[0-9,]*" // Permite dígitos y comas
                 />
               </div>
             </div>
@@ -341,7 +407,7 @@ function App() {
           </div>
         </div>
 
-        {/* Extra Payments Section */}
+        {/* Sección de Abonos Extra */}
         <div className="bg-blue-100 p-8 md:p-10 rounded-3xl shadow-xl w-full lg:w-1/2 border border-blue-200">
           <h2 className="text-xl md:text-2xl font-bold text-center text-gray-700 mb-6">Abonos Extraordinarios</h2>
           <div className="grid grid-cols-1 gap-6 mb-6">
@@ -355,10 +421,23 @@ function App() {
                   type="text"
                   id="newExtraPaymentAmount"
                   className="w-full pl-8 pr-4 py-2 border border-blue-300 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-gray-800 text-right"
-                  value={newExtraPaymentAmount}
-                  onChange={(e) => setNewExtraPaymentAmount(cleanNumberInput(e.target.value))}
+                  value={displayNewExtraPaymentAmount} // Componente controlado
+                  onChange={(e) => {
+                    const rawValue = e.target.value;
+                    setDisplayNewExtraPaymentAmount(rawValue); // Actualizar el estado de display con la entrada cruda del usuario
+                    const cleanNum = cleanNumberInput(rawValue);
+                    setNewExtraPaymentAmount(cleanNum !== '' ? parseFloat(cleanNum) : 0); // Actualizar el estado numérico
+                  }}
+                  onBlur={() => {
+                    // Al perder el foco, forzar el formato basado en el estado numérico actual
+                    if (typeof newExtraPaymentAmount === 'number' && !isNaN(newExtraPaymentAmount)) {
+                      setDisplayNewExtraPaymentAmount(new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(newExtraPaymentAmount));
+                    } else {
+                      setDisplayNewExtraPaymentAmount('');
+                    }
+                  }}
                   inputMode="numeric"
-                  pattern="[0-9]*"
+                  pattern="[0-9,]*" // Permite dígitos y comas
                 />
               </div>
             </div>
@@ -383,7 +462,7 @@ function App() {
             </button>
           </div>
 
-          {/* List of current extra payments */}
+          {/* Lista de abonos extra actuales */}
           {extraPayments.length > 0 && (
             <div className="mt-6 border-t border-blue-200 pt-6">
               <h3 className="text-lg font-semibold text-gray-700 mb-4">Abonos Agregados:</h3>
@@ -411,7 +490,7 @@ function App() {
       </div>
 
 
-      {/* Amortization Chart */}
+      {/* Gráfico de Amortización */}
       {amortizationSchedule.length > 0 && (
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-5xl mx-auto mb-10 border border-gray-100">
           <h2 className="text-xl md:text-2xl font-bold text-center text-gray-700 mb-6">Visualización de los pagos mes a mes</h2>
@@ -429,9 +508,8 @@ function App() {
               <XAxis dataKey="month" />
               <YAxis
                 tickFormatter={formatCurrency}
-                // Dynamically set Y-axis domain to fit data, adding 10% padding
-                domain={[0, Math.max(...chartData.map(item => item['Pago a Capital'] + item['Pago de Interés'])) * 1.1]}
-                width={100} // Give Y-axis some fixed width for formatting
+                domain={[0, chartData.length > 0 ? Math.max(...chartData.map(item => (item['Pago a Capital (Regular)'] || 0) + (item['Pago de Interés'] || 0) + (item['Abono Extraordinario'] || 0))) * 1.1 : 'auto']}
+                width={100}
               />
               <Tooltip
                 formatter={(value, name) => [`${formatCurrency(value)}`, name]}
@@ -439,18 +517,19 @@ function App() {
                 labelStyle={{ color: '#333', fontWeight: 'bold' }}
               />
               <Legend />
-              <Bar dataKey="Pago a Capital" stackId="a" fill="#4299E1" /> {/* Tailwind blue-500 */}
-              <Bar dataKey="Pago de Interés" stackId="a" fill="#81C784" /> {/* A light green */}
+              <Bar dataKey="Pago a Capital (Regular)" stackId="a" fill="#4299E1" /> {/* Azul para capital regular */}
+              <Bar dataKey="Pago de Interés" stackId="a" fill="#81C784" /> {/* Verde claro para interés */}
+              <Bar dataKey="Abono Extraordinario" stackId="a" fill="#FFD700" /> {/* Dorado para abonos extra */}
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {/* Amortization Table */}
+      {/* Tabla de Amortización */}
       {amortizationSchedule.length > 0 && (
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-5xl mx-auto border border-gray-100">
           <h2 className="text-xl md:text-2xl font-bold text-center text-gray-700 mb-6">Tabla de Amortización Detallada</h2>
-          <div className="overflow-x-auto overflow-y-auto max-h-[500px] relative rounded-lg border border-gray-200"> {/* Increased max-height slightly */}
+          <div className="overflow-x-auto overflow-y-auto max-h-[500px] relative rounded-lg border border-gray-200">
             <table className="min-w-full divide-y divide-gray-100">
               <thead className="bg-blue-700 text-white sticky top-0 z-10 shadow-sm">
                 <tr>
@@ -473,9 +552,14 @@ function App() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
                 {amortizationSchedule.map((row, index) => (
-                  <tr key={row.month} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors duration-150`}>
+                  <tr key={row.month} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${row.extraPaymentApplied ? 'bg-yellow-50 font-semibold border-l-4 border-yellow-500' : ''} hover:bg-blue-50 transition-colors duration-150`}>
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       {row.month}
+                      {row.extraPaymentApplied && (
+                        <span className="ml-2 px-2 py-0.5 text-xs font-bold text-yellow-800 bg-yellow-200 rounded-full">
+                          Abono {formatCurrency(row.extraPaymentApplied)}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800">
                       {formatCurrency(row.monthlyPayment)}
