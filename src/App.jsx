@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -9,7 +9,7 @@ function App() {
     new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(100000)
   );
 
-  const [annualInterestRate, setAnnualInterestRate] = useState(5);
+  const [annualInterestRate, setAnnualInterestRate] = useState(5); // Now treated as TEA
   const [loanTerm, setLoanTerm] = useState(5);
   const [loanTermUnit, setLoanTermUnit] = useState('years');
   const [amortizationSchedule, setAmortizationSchedule] = useState([]);
@@ -79,6 +79,19 @@ function App() {
   };
 
   /**
+   * Calculates the correct monthly effective rate (TEM) from the Annual Effective Rate (TEA).
+   * Formula: TEM = (1 + TEA)^(1/12) - 1
+   * @param {number} annualRatePercentage - The TEA as a percentage (e.g., 5).
+   * @returns {number} The TEM in decimal format (e.g., 0.004074)
+   */
+  const calculateTEMFromTEA = (annualRatePercentage) => {
+    const annualRateDecimal = annualRatePercentage / 100;
+    if (annualRateDecimal === 0) return 0;
+    // CRITICAL CORRECTION: Use compounding formula for Effective Rate conversion
+    return Math.pow(1 + annualRateDecimal, 1 / 12) - 1;
+  };
+
+  /**
    * Calculates the total interest for a standard amortization plan without extra payments.
    * This is used to establish a baseline for interest saved.
    */
@@ -87,13 +100,13 @@ function App() {
       return 0;
     }
 
-    const annualRate = annualRatePercentage / 100; // Convert to decimal
-    const monthlyRate = annualRate / 12;
+    const monthlyRate = calculateTEMFromTEA(annualRatePercentage);
     let monthlyPayment;
 
     if (monthlyRate === 0) {
       monthlyPayment = principal / totalMonths;
     } else {
+      // Standard Annuity Payment Formula
       monthlyPayment = principal * (monthlyRate / (1 - Math.pow(1 + monthlyRate, -totalMonths)));
     }
 
@@ -126,7 +139,9 @@ function App() {
    */
   const calculateAmortization = () => {
     const principal = parseFloat(loanAmount);
-    const annualRate = parseFloat(annualInterestRate) / 100;
+    // annualInterestRate is the TEA in percentage
+    const annualRatePercentage = parseFloat(annualInterestRate);
+
     let initialTotalMonths = parseInt(loanTerm);
 
     if (loanTermUnit === 'years') {
@@ -134,14 +149,16 @@ function App() {
     }
 
     // Input validation
-    if (isNaN(principal) || isNaN(annualRate) || isNaN(initialTotalMonths) || principal <= 0 || initialTotalMonths <= 0) {
+    if (isNaN(principal) || isNaN(annualRatePercentage) || isNaN(initialTotalMonths) || principal <= 0 || initialTotalMonths <= 0) {
       setAmortizationSchedule([]);
       setChartData([]);
       setTotalInterestSaved(0);
       return;
     }
 
-    const monthlyRate = annualRate / 12;
+    // CRITICAL CORRECTION: Calculate TEM from TEA
+    const monthlyRate = calculateTEMFromTEA(annualRatePercentage);
+
     let originalMonthlyPayment;
 
     if (monthlyRate === 0) {
@@ -151,7 +168,7 @@ function App() {
     }
 
     // Calculate baseline total interest without extra payments
-    const baselineTotalInterest = calculateTotalInterestWithoutExtraPayments(principal, annualInterestRate, initialTotalMonths);
+    const baselineTotalInterest = calculateTotalInterestWithoutExtraPayments(principal, annualRatePercentage, initialTotalMonths);
 
 
     let currentRemainingBalance = principal;
@@ -215,6 +232,7 @@ function App() {
       // Add to schedule and chart data
       schedule.push({
         month: i,
+        // The actual monthly payment recorded should include the extra payment for clarity if applied to the same month
         monthlyPayment: actualMonthlyPaymentRecorded,
         principalPayment: regularPrincipalPaymentThisMonth, // This is the regular monthly principal payment
         interestPayment: interestPaymentThisMonth,
@@ -369,7 +387,7 @@ function App() {
             </div>
             <div>
               <label htmlFor="annualInterestRate" className="block text-gray-600 text-sm font-semibold mb-2">
-                Tasa de Interés Anual (%):
+                Tasa Efectiva Anual (TEA) en %:
               </label>
               <input
                 type="number"
@@ -586,3 +604,4 @@ function App() {
 }
 
 export default App;
+
