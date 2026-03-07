@@ -312,41 +312,41 @@ function App() {
       </h1>
 
       {/* Summary Block */}
-      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-4xl mx-auto mb-10 border border-gray-100">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 text-center">
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-5xl mx-auto mb-10 border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 text-center items-stretch">
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1">Cuota Mensual:</p>
-            {/* Ajuste de tipografía y corte de línea para evitar que los valores largos sobresalgan del recuadro */}
-            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold break-words leading-tight">
+            {/* Tipografía ajustada para que grandes montos se mantengan en una sola línea y el recuadro se adapte de forma responsiva */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg font-bold whitespace-nowrap tracking-tight">
               {formatCurrency(amortizationSchedule[0]?.monthlyPayment || 0)}
             </p>
           </div>
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1">Número de pagos:</p>
-            {/* Ajuste de tipografía y corte de línea para evitar que los valores largos sobresalgan del recuadro */}
-            <p className="text-base sm:text-lg md:text-xl font-bold break-words leading-tight">
+            {/* Tipografía ajustada para que los valores se mantengan en una sola línea */}
+            <p className="text-sm sm:text-base md:text-lg lg:text-xl font-bold whitespace-nowrap tracking-tight">
               {amortizationSchedule.length}
             </p>
           </div>
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1">Interés Total Pagado:</p>
-            {/* Ajuste de tipografía y corte de línea para evitar que los valores largos sobresalgan del recuadro */}
-            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold break-words leading-tight">
+            {/* Tipografía ajustada para que grandes montos se mantengan en una sola línea */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg font-bold whitespace-nowrap tracking-tight">
               {formatCurrency(amortizationSchedule.reduce((sum, row) => sum + row.interestPayment, 0))}
             </p>
           </div>
           {/* New box for Interest Saved */}
           <div className="bg-green-600 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1">Interés Total Ahorrado:</p>
-            {/* Ajuste de tipografía y corte de línea para evitar que los valores largos sobresalgan del recuadro */}
-            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold break-words leading-tight">
+            {/* Tipografía ajustada para que grandes montos se mantengan en una sola línea */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg font-bold whitespace-nowrap tracking-tight">
               {formatCurrency(totalInterestSaved)}
             </p>
           </div>
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1">Monto Original:</p>
-            {/* Ajuste de tipografía y corte de línea para evitar que los valores largos sobresalgan del recuadro */}
-            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold break-words leading-tight">
+            {/* Tipografía ajustada para que grandes montos se mantengan en una sola línea */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg font-bold whitespace-nowrap tracking-tight">
               {formatCurrency(loanAmount)}
             </p>
           </div>
@@ -541,24 +541,24 @@ function App() {
                 labelStyle={{ color: '#0f172a', fontWeight: '600', fontSize: 13 }}
               />
               <Legend />
-              {/* Barras suavemente redondeadas para un estilo más moderno */}
+              {/* Barras principales planas; solo un redondeo sutil en la parte superior del total */}
               <Bar
                 dataKey="Pago a Capital (Regular)"
                 stackId="a"
                 fill="#4299E1"
-                radius={[10, 10, 0, 0]}
+                radius={[0, 0, 0, 0]}
               />
               <Bar
                 dataKey="Pago de Interés"
                 stackId="a"
                 fill="#81C784"
-                radius={[10, 10, 0, 0]}
+                radius={[0, 0, 0, 0]}
               />
               <Bar
                 dataKey="Abono Extraordinario"
                 stackId="a"
                 fill="#FFA500"
-                radius={[10, 10, 0, 0]}
+                radius={[4, 4, 0, 0]}
               />
             </BarChart>
           </ResponsiveContainer>
