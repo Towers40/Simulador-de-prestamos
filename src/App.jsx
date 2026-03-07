@@ -316,35 +316,39 @@ function App() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 text-center">
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1">Cuota Mensual:</p>
-            {/* Font size adjustment for better fitting */}
-            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold">{formatCurrency(amortizationSchedule[0]?.monthlyPayment || 0)}</p>
+            {/* Ajuste de tipografía y corte de línea para evitar que los valores largos sobresalgan del recuadro */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold break-words leading-tight">
+              {formatCurrency(amortizationSchedule[0]?.monthlyPayment || 0)}
+            </p>
           </div>
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1">Número de pagos:</p>
-            {/* Font size adjustment for better fitting */}
-            <p className="text-base sm:text-lg md:text-xl font-bold">
+            {/* Ajuste de tipografía y corte de línea para evitar que los valores largos sobresalgan del recuadro */}
+            <p className="text-base sm:text-lg md:text-xl font-bold break-words leading-tight">
               {amortizationSchedule.length}
             </p>
           </div>
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1">Interés Total Pagado:</p>
-            {/* Font size adjustment for better fitting */}
-            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold">
+            {/* Ajuste de tipografía y corte de línea para evitar que los valores largos sobresalgan del recuadro */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold break-words leading-tight">
               {formatCurrency(amortizationSchedule.reduce((sum, row) => sum + row.interestPayment, 0))}
             </p>
           </div>
           {/* New box for Interest Saved */}
           <div className="bg-green-600 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1">Interés Total Ahorrado:</p>
-            {/* Font size adjustment for better fitting */}
-            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold">
+            {/* Ajuste de tipografía y corte de línea para evitar que los valores largos sobresalgan del recuadro */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold break-words leading-tight">
               {formatCurrency(totalInterestSaved)}
             </p>
           </div>
           <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center">
             <p className="text-sm md:text-base opacity-80 mb-1">Monto Original:</p>
-            {/* Font size adjustment for better fitting */}
-            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold">{formatCurrency(loanAmount)}</p>
+            {/* Ajuste de tipografía y corte de línea para evitar que los valores largos sobresalgan del recuadro */}
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl font-bold break-words leading-tight">
+              {formatCurrency(loanAmount)}
+            </p>
           </div>
         </div>
       </div>
@@ -523,7 +527,8 @@ function App() {
                 bottom: 10,
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" />
+              {/* Líneas de fondo más suaves para un look tipo landing page */}
+              <CartesianGrid stroke="rgba(148, 163, 184, 0.35)" strokeDasharray="2 6" vertical={false} />
               <XAxis dataKey="month" />
               <YAxis
                 tickFormatter={formatCurrency}
@@ -532,13 +537,29 @@ function App() {
               />
               <Tooltip
                 formatter={(value, name) => [`${formatCurrency(value)}`, name]}
-                contentStyle={{ backgroundColor: '#fff', border: 'none', borderRadius: '10px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}
-                labelStyle={{ color: '#333', fontWeight: 'bold' }}
+                contentStyle={{ backgroundColor: '#ffffff', border: 'none', borderRadius: '14px', boxShadow: '0 18px 45px rgba(15, 23, 42, 0.12)' }}
+                labelStyle={{ color: '#0f172a', fontWeight: '600', fontSize: 13 }}
               />
               <Legend />
-              <Bar dataKey="Pago a Capital (Regular)" stackId="a" fill="#4299E1" /> {/* Blue for regular principal */}
-              <Bar dataKey="Pago de Interés" stackId="a" fill="#81C784" /> {/* Light green for interest */}
-              <Bar dataKey="Abono Extraordinario" stackId="a" fill="#FFA500" /> {/* Vibrant orange for extra payments */}
+              {/* Barras suavemente redondeadas para un estilo más moderno */}
+              <Bar
+                dataKey="Pago a Capital (Regular)"
+                stackId="a"
+                fill="#4299E1"
+                radius={[10, 10, 0, 0]}
+              />
+              <Bar
+                dataKey="Pago de Interés"
+                stackId="a"
+                fill="#81C784"
+                radius={[10, 10, 0, 0]}
+              />
+              <Bar
+                dataKey="Abono Extraordinario"
+                stackId="a"
+                fill="#FFA500"
+                radius={[10, 10, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
