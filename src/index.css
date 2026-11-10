@@ -2,16 +2,129 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+  }
+
+  ::selection {
+    @apply bg-brand-100 text-brand-900;
+  }
+
+  /* Quita las flechas de los inputs numéricos para un look más limpio. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer components {
+  .card {
+    @apply rounded-3xl border border-line/80 bg-white shadow-card;
+  }
+
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.14em] text-brand-600;
+  }
+
+  /* Slider: pista fina con relleno de marca y control táctil de 26px. */
+  .range {
+    --pct: 50%;
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 28px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range:focus {
+    outline: none;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(to right, theme('colors.brand.500') 0 var(--pct), theme('colors.line') var(--pct) 100%);
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 26px;
+    height: 26px;
+    margin-top: -10px;
+    border-radius: 999px;
+    background: #fff;
+    border: 2px solid theme('colors.brand.600');
+    box-shadow: 0 2px 6px rgba(23, 33, 31, 0.18);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .range:active::-webkit-slider-thumb {
+    transform: scale(1.12);
+  }
+  .range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 5px theme('colors.brand.100'), 0 2px 6px rgba(23, 33, 31, 0.18);
+  }
+  .range::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: theme('colors.line');
+  }
+  .range::-moz-range-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: theme('colors.brand.500');
+  }
+  .range::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: #fff;
+    border: 2px solid theme('colors.brand.600');
+    box-shadow: 0 2px 6px rgba(23, 33, 31, 0.18);
+  }
+  .range:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 5px theme('colors.brand.100'), 0 2px 6px rgba(23, 33, 31, 0.18);
+  }
+
+  /* Contenedor colapsable con transición de altura (grid 0fr → 1fr). */
+  .collapsible {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .collapsible[data-open='true'] {
+    grid-template-rows: 1fr;
+  }
+  .collapsible > * {
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

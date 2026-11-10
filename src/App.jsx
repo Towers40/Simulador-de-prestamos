@@ -1,701 +1,141 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
-} from 'recharts';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { rateEquivalences, simulateLoan } from './lib/finance.js';
+import { parseDecimal } from './lib/format.js';
+import { downloadAmortizationPDF } from './lib/pdf.js';
+import { LoanInputs } from './components/LoanInputs.jsx';
+import { ExtraPayments } from './components/ExtraPayments.jsx';
+import { ResultsCard } from './components/ResultsCard.jsx';
+import { PaymentsChart } from './components/PaymentsChart.jsx';
+import { AmortizationTable } from './components/AmortizationTable.jsx';
+import { Footer, Hero, HowItWorks, MobileSummaryBar, NavBar } from './components/Landing.jsx';
 
-// Helper component that auto-shrinks text to fit its container
-function FitText({ children, className = '' }) {
-  return (
-    <p
-      className={`font-bold leading-tight break-all text-center ${className}`}
-      style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-    >
-      {children}
-    </p>
-  );
-}
-
-function App() {
-  const [loanAmount, setLoanAmount] = useState(100000);
-  const [displayLoanAmount, setDisplayLoanAmount] = useState(
-    new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(100000)
-  );
-
-  const [annualInterestRate, setAnnualInterestRate] = useState(5);
-  const [loanTerm, setLoanTerm] = useState(5);
-  const [loanTermUnit, setLoanTermUnit] = useState('years');
-  const [amortizationSchedule, setAmortizationSchedule] = useState([]);
-  const [chartData, setChartData] = useState([]);
-  const [totalInterestSaved, setTotalInterestSaved] = useState(0);
-
+export default function App() {
+  const [amount, setAmount] = useState(10_000_000);
+  const [rateInput, setRateInput] = useState('18');
+  const [termInput, setTermInput] = useState('5');
+  const [termUnit, setTermUnit] = useState('years');
   const [extraPayments, setExtraPayments] = useState([]);
-  const [newExtraPaymentAmount, setNewExtraPaymentAmount] = useState(0);
-  const [displayNewExtraPaymentAmount, setDisplayNewExtraPaymentAmount] = useState('');
-  const [newExtraPaymentMonth, setNewExtraPaymentMonth] = useState('');
 
-  const [message, setMessage] = useState('');
+  const eaPct = parseDecimal(rateInput);
+  const rates = useMemo(() => rateEquivalences(eaPct), [eaPct]);
+  const termNumber = parseInt(termInput, 10);
+  const months =
+    Number.isInteger(termNumber) && termNumber > 0 ? (termUnit === 'years' ? termNumber * 12 : termNumber) : 0;
+
+  const sim = useMemo(
+    () => simulateLoan({ principal: amount, eaPct, months, extraPayments }),
+    [amount, eaPct, months, extraPayments],
+  );
+  // El gráfico y la tabla se actualizan con prioridad baja para que los sliders vayan fluidos.
+  const deferredSim = useDeferredValue(sim);
+
+  const appliedMonths = useMemo(
+    () => new Set(sim?.rows.filter((r) => r.extra > 0).map((r) => r.month)),
+    [sim],
+  );
+
+  /* Barra de resumen en móvil: visible mientras se editan datos y el resultado no está en pantalla. */
+  const inputsRef = useRef(null);
+  const extrasRef = useRef(null);
+  const resultsRef = useRef(null);
+  const [barVisible, setBarVisible] = useState(false);
 
   useEffect(() => {
-    calculateAmortization();
-  }, [loanAmount, annualInterestRate, loanTerm, loanTermUnit, extraPayments]);
-
-  useEffect(() => {
-    if (typeof loanAmount === 'number' && !isNaN(loanAmount)) {
-      setDisplayLoanAmount(new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(loanAmount));
-    } else {
-      setDisplayLoanAmount('');
-    }
-  }, [loanAmount]);
-
-  useEffect(() => {
-    if (typeof newExtraPaymentAmount === 'number' && !isNaN(newExtraPaymentAmount)) {
-      setDisplayNewExtraPaymentAmount(new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(newExtraPaymentAmount));
-    } else {
-      setDisplayNewExtraPaymentAmount('');
-    }
-  }, [newExtraPaymentAmount]);
-
-  const cleanNumberInput = (value) => {
-    let cleaned = value.replace(/[^0-9,]/g, '');
-    const parts = cleaned.split(',');
-    if (parts.length > 2) {
-      cleaned = parts[0] + ',' + parts.slice(1).join('');
-    }
-    return cleaned.replace(',', '.');
-  };
-
-  const formatCurrency = (value) => {
-    let numValue = parseFloat(value);
-    if (isNaN(numValue)) {
-      numValue = 0;
-    }
-    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(numValue);
-  };
-
-  const calculateTEMFromTEA = (annualRatePercentage) => {
-    const annualRateDecimal = annualRatePercentage / 100;
-    if (annualRateDecimal === 0) return 0;
-    return Math.pow(1 + annualRateDecimal, 1 / 12) - 1;
-  };
-
-  const calculateTotalInterestWithoutExtraPayments = (principal, annualRatePercentage, totalMonths) => {
-    if (isNaN(principal) || principal <= 0 || isNaN(annualRatePercentage) || totalMonths <= 0) {
-      return 0;
-    }
-
-    const monthlyRate = calculateTEMFromTEA(annualRatePercentage);
-    let monthlyPayment;
-
-    if (monthlyRate === 0) {
-      monthlyPayment = principal / totalMonths;
-    } else {
-      monthlyPayment = principal * (monthlyRate / (1 - Math.pow(1 + monthlyRate, -totalMonths)));
-    }
-
-    let remainingBalance = principal;
-    let totalInterest = 0;
-
-    for (let i = 1; i <= totalMonths; i++) {
-      if (remainingBalance <= 0.01) break;
-
-      const interestPayment = remainingBalance * monthlyRate;
-      let principalPayment = monthlyPayment - interestPayment;
-
-      if (principalPayment < 0) {
-        principalPayment = 0;
-      }
-
-      if (remainingBalance < principalPayment) {
-        principalPayment = remainingBalance;
-      }
-
-      totalInterest += interestPayment;
-      remainingBalance -= principalPayment;
-    }
-    return totalInterest;
-  };
-
-  const calculateAmortization = () => {
-    const principal = parseFloat(loanAmount);
-    const annualRatePercentage = parseFloat(annualInterestRate);
-
-    let initialTotalMonths = parseInt(loanTerm);
-
-    if (loanTermUnit === 'years') {
-      initialTotalMonths = initialTotalMonths * 12;
-    }
-
-    if (isNaN(principal) || isNaN(annualRatePercentage) || isNaN(initialTotalMonths) || principal <= 0 || initialTotalMonths <= 0) {
-      setAmortizationSchedule([]);
-      setChartData([]);
-      setTotalInterestSaved(0);
-      return;
-    }
-
-    const monthlyRate = calculateTEMFromTEA(annualRatePercentage);
-
-    let originalMonthlyPayment;
-
-    if (monthlyRate === 0) {
-      originalMonthlyPayment = principal / initialTotalMonths;
-    } else {
-      originalMonthlyPayment = principal * (monthlyRate / (1 - Math.pow(1 + monthlyRate, -initialTotalMonths)));
-    }
-
-    const baselineTotalInterest = calculateTotalInterestWithoutExtraPayments(principal, annualRatePercentage, initialTotalMonths);
-
-    let currentRemainingBalance = principal;
-    const schedule = [];
-    const dataForChart = [];
-    let currentTotalInterestPaid = 0;
-
-    const sortedExtraPayments = [...extraPayments].sort((a, b) => a.month - b.month);
-    let extraPaymentIdx = 0;
-
-    for (let i = 1; i <= initialTotalMonths * 2 + 1 && currentRemainingBalance > 0.01; i++) {
-      let interestPaymentThisMonth = currentRemainingBalance * monthlyRate;
-      let regularPrincipalPaymentThisMonth = originalMonthlyPayment - interestPaymentThisMonth;
-      let extraPaymentAppliedThisMonth = 0;
-
-      let actualMonthlyPaymentRecorded;
-
-      while (extraPaymentIdx < sortedExtraPayments.length && sortedExtraPayments[extraPaymentIdx].month === i) {
-        const ep = sortedExtraPayments[extraPaymentIdx];
-        if (currentRemainingBalance > 0.01) {
-          extraPaymentAppliedThisMonth += ep.amount;
-          currentRemainingBalance = Math.max(0, currentRemainingBalance - ep.amount);
-        }
-        extraPaymentIdx++;
-        if (currentRemainingBalance <= 0.01) break;
-      }
-
-      if (currentRemainingBalance <= 0.01) {
-        interestPaymentThisMonth = 0;
-        regularPrincipalPaymentThisMonth = 0;
-        actualMonthlyPaymentRecorded = 0;
-      } else {
-        interestPaymentThisMonth = currentRemainingBalance * monthlyRate;
-        regularPrincipalPaymentThisMonth = originalMonthlyPayment - interestPaymentThisMonth;
-
-        if (regularPrincipalPaymentThisMonth > currentRemainingBalance + 0.01) {
-          regularPrincipalPaymentThisMonth = currentRemainingBalance;
-          actualMonthlyPaymentRecorded = regularPrincipalPaymentThisMonth + interestPaymentThisMonth;
-          currentRemainingBalance = 0;
-        } else {
-          actualMonthlyPaymentRecorded = originalMonthlyPayment;
-          currentRemainingBalance -= regularPrincipalPaymentThisMonth;
-        }
-
-        if (regularPrincipalPaymentThisMonth < 0) regularPrincipalPaymentThisMonth = 0;
-        if (interestPaymentThisMonth < 0) interestPaymentThisMonth = 0;
-      }
-
-      currentTotalInterestPaid += interestPaymentThisMonth;
-
-      schedule.push({
-        month: i,
-        monthlyPayment: actualMonthlyPaymentRecorded,
-        principalPayment: regularPrincipalPaymentThisMonth,
-        interestPayment: interestPaymentThisMonth,
-        remainingBalance: currentRemainingBalance,
-        extraPaymentApplied: extraPaymentAppliedThisMonth > 0 ? extraPaymentAppliedThisMonth : null,
-      });
-
-      dataForChart.push({
-        month: i,
-        'Pago a Capital (Regular)': regularPrincipalPaymentThisMonth,
-        'Pago de Interés': interestPaymentThisMonth,
-        'Abono Extraordinario': extraPaymentAppliedThisMonth > 0 ? extraPaymentAppliedThisMonth : 0,
-        'Saldo Restante': currentRemainingBalance,
-      });
-
-      if (currentRemainingBalance <= 0.01) break;
-    }
-
-    setAmortizationSchedule(schedule);
-    setChartData(dataForChart);
-    setTotalInterestSaved(baselineTotalInterest - currentTotalInterestPaid);
-  };
-
-  const handleAddExtraPayment = () => {
-    const amount = newExtraPaymentAmount;
-    const month = parseInt(newExtraPaymentMonth);
-    let initialTotalMonths = parseInt(loanTerm);
-    if (loanTermUnit === 'years') {
-      initialTotalMonths = initialTotalMonths * 12;
-    }
-
-    if (isNaN(amount) || amount <= 0) {
-      setMessage('Por favor, ingresa un monto válido para el abono extraordinario.');
-      return;
-    }
-    if (isNaN(month) || month <= 0 || month > initialTotalMonths * 2 + 1) {
-      setMessage(`Por favor, ingresa un mes válido (entre 1 y ${initialTotalMonths * 2 + 1}).`);
-      return;
-    }
-
-    setExtraPayments(prev => [...prev, { id: Date.now(), amount, month }]);
-    setNewExtraPaymentAmount(0);
-    setNewExtraPaymentMonth('');
-    setMessage('');
-  };
-
-  const handleRemoveExtraPayment = (idToRemove) => {
-    setExtraPayments(prev => prev.filter(ep => ep.id !== idToRemove));
-    setMessage('');
-  };
-
-  const generatePDF = async () => {
-    await new Promise((resolve, reject) => {
-      if (window.jspdf) return resolve();
-      const s1 = document.createElement('script');
-      s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-      s1.onload = () => {
-        const s2 = document.createElement('script');
-        s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
-        s2.onload = resolve;
-        s2.onerror = reject;
-        document.head.appendChild(s2);
-      };
-      s1.onerror = reject;
-      document.head.appendChild(s1);
-    });
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW = doc.internal.pageSize.getWidth();
-    const margin = 18;
-    const colW = (pageW - margin * 2) / 2;
-
-    doc.setFillColor(29, 78, 216);
-    doc.rect(0, 0, pageW, 28, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Simulador de Prestamos', pageW / 2, 12, { align: 'center' });
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    const today = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
-    doc.text('Generado el ' + today, pageW / 2, 21, { align: 'center' });
-
-    let y = 36;
-    doc.setTextColor(30, 41, 59);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Condiciones del Prestamo', margin, y);
-    y += 2;
-    doc.setDrawColor(29, 78, 216);
-    doc.setLineWidth(0.5);
-    doc.line(margin, y, pageW - margin, y);
-    y += 6;
-
-    const totalMonths = loanTermUnit === 'years' ? parseInt(loanTerm) * 12 : parseInt(loanTerm);
-    const monthlyRatePct = (Math.pow(1 + parseFloat(annualInterestRate) / 100, 1 / 12) - 1) * 100;
-    const totalInterestPaid = amortizationSchedule.reduce((s, r) => s + r.interestPayment, 0);
-
-    const summaryItems = [
-      ['Monto Original', formatCurrency(loanAmount)],
-      ['Tasa Efectiva Anual (TEA)', parseFloat(annualInterestRate).toFixed(2) + '%'],
-      ['Tasa Efectiva Mensual (TEM)', monthlyRatePct.toFixed(4) + '%'],
-      ['Plazo', loanTerm + ' ' + (loanTermUnit === 'years' ? 'anos' : 'meses') + ' (' + totalMonths + ' meses)'],
-    ];
-    const resultItems = [
-      ['Cuota Mensual', formatCurrency(amortizationSchedule[0]?.monthlyPayment || 0)],
-      ['Numero de Pagos Reales', '' + amortizationSchedule.length],
-      ['Interes Total Pagado', formatCurrency(totalInterestPaid)],
-      ['Interes Total Ahorrado', formatCurrency(totalInterestSaved)],
-    ];
-
-    const drawKeyValue = (items, startX, startY) => {
-      doc.setFontSize(9);
-      let cy = startY;
-      items.forEach(([label, value]) => {
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100, 116, 139);
-        doc.text(label, startX, cy);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
-        doc.text(value, startX + colW - 4, cy, { align: 'right' });
-        cy += 7;
-      });
-      return cy;
-    };
-
-    const leftEndY = drawKeyValue(summaryItems, margin, y);
-    const rightEndY = drawKeyValue(resultItems, margin + colW, y);
-    y = Math.max(leftEndY, rightEndY) + 4;
-
-    if (extraPayments.length > 0) {
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(30, 41, 59);
-      doc.text('Abonos Extraordinarios', margin, y);
-      y += 2;
-      doc.setDrawColor(234, 179, 8);
-      doc.line(margin, y, pageW - margin, y);
-      y += 4;
-
-      doc.autoTable({
-        startY: y,
-        head: [['Mes', 'Monto del Abono']],
-        body: [...extraPayments].sort((a, b) => a.month - b.month).map(ep => [ep.month, formatCurrency(ep.amount)]),
-        styles: { fontSize: 8, cellPadding: 2.5 },
-        headStyles: { fillColor: [234, 179, 8], textColor: [30, 41, 59], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [254, 252, 232] },
-        margin: { left: margin, right: margin },
-        tableWidth: 80,
-      });
-      y = doc.lastAutoTable.finalY + 8;
-    }
-
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-    doc.text('Tabla de Amortizacion Detallada', margin, y);
-    y += 2;
-    doc.setDrawColor(29, 78, 216);
-    doc.line(margin, y, pageW - margin, y);
-    y += 4;
-
-    const scheduleSnapshot = [...amortizationSchedule];
-    const tableBody = scheduleSnapshot.map(row => [
-      row.month + (row.extraPaymentApplied ? ' *' : ''),
-      formatCurrency(row.monthlyPayment),
-      formatCurrency(row.interestPayment),
-      formatCurrency(row.principalPayment),
-      row.extraPaymentApplied ? formatCurrency(row.extraPaymentApplied) : '-',
-      formatCurrency(row.remainingBalance),
-    ]);
-
-    doc.autoTable({
-      startY: y,
-      head: [['Mes', 'Cuota Mensual', 'Intereses', 'Capital', 'Abono Extra', 'Saldo Restante']],
-      body: tableBody,
-      styles: { fontSize: 7.5, cellPadding: 2, halign: 'right' },
-      headStyles: { fillColor: [29, 78, 216], textColor: 255, fontStyle: 'bold', halign: 'center' },
-      columnStyles: { 0: { halign: 'center' } },
-      alternateRowStyles: { fillColor: [239, 246, 255] },
-      didParseCell: (data) => {
-        if (data.section === 'body' && scheduleSnapshot[data.row.index]?.extraPaymentApplied) {
-          data.cell.styles.fillColor = [254, 249, 195];
-          data.cell.styles.fontStyle = 'bold';
-        }
+    const seen = new Map();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) seen.set(entry.target, entry.isIntersecting);
+        const editing = seen.get(inputsRef.current) || seen.get(extrasRef.current);
+        setBarVisible(Boolean(editing) && !seen.get(resultsRef.current));
       },
-      margin: { left: margin, right: margin },
-    });
+      { rootMargin: '-72px 0px -96px 0px' },
+    );
+    for (const ref of [inputsRef, extrasRef, resultsRef]) if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
 
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-      doc.setFontSize(7.5);
-      doc.setTextColor(148, 163, 184);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Pagina ' + i + ' de ' + totalPages, pageW / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
-      doc.text('Simulador de Prestamos', margin, doc.internal.pageSize.getHeight() - 8);
-    }
+  const scrollToResults = useCallback(() => {
+    resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
-    doc.save('tabla_amortizacion.pdf');
-  };
+  const handleDownload = () =>
+    downloadAmortizationPDF({ sim, eaPct, rates, termValue: termNumber, termUnit, extraPayments });
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col py-12 px-4 font-sans text-gray-800 w-screen">
-      {message && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl relative mb-4 max-w-md mx-auto text-center" role="alert">
-          <span className="block sm:inline">{message}</span>
-          <span className="absolute top-0 bottom-0 right-0 px-4 py-3 cursor-pointer" onClick={() => setMessage('')}>
-            <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Cerrar</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z" /></svg>
-          </span>
-        </div>
-      )}
+    <div className="min-h-screen">
+      <a
+        href="#simulador"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:shadow-lift"
+      >
+        Ir al simulador
+      </a>
+      <NavBar />
 
-      <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-10 text-center mx-auto max-w-screen-xl">
-        Simulador de Préstamos
-      </h1>
+      <main>
+        <Hero />
 
-      {/* Summary Block */}
-      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-5xl mx-auto mb-10 border border-gray-100">
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={generatePDF}
-            disabled={amortizationSchedule.length === 0}
-            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2 px-5 rounded-lg shadow-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-300"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clipRule="evenodd" />
-            </svg>
-            Descargar PDF
-          </button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 text-center items-stretch">
+        <section id="simulador" className="scroll-mt-24 px-4 sm:px-6" aria-labelledby="simulador-title">
+          <div className="mx-auto max-w-6xl">
+            <div className="grid items-start gap-4 lg:grid-cols-12 lg:gap-6">
+              <div
+                ref={inputsRef}
+                className="card animate-fade-up p-5 sm:p-7 lg:col-span-7 lg:col-start-1 lg:row-start-1"
+                style={{ animationDelay: '360ms' }}
+              >
+                <div className="mb-7">
+                  <p className="eyebrow">Simulador</p>
+                  <h2 id="simulador-title" className="mt-1.5 text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+                    Datos del préstamo
+                  </h2>
+                  <p className="mt-1 text-sm text-ink-muted">Ajusta los valores: todo se recalcula al instante.</p>
+                </div>
+                <LoanInputs
+                  amount={amount}
+                  onAmountChange={setAmount}
+                  rateInput={rateInput}
+                  onRateInputChange={setRateInput}
+                  eaPct={eaPct}
+                  rates={rates}
+                  termInput={termInput}
+                  onTermInputChange={setTermInput}
+                  termUnit={termUnit}
+                  onTermUnitChange={setTermUnit}
+                />
+              </div>
 
-          {/* Cuota Mensual */}
-          <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center min-h-[80px]">
-            <p className="text-sm md:text-base opacity-80 mb-1">Cuota Mensual:</p>
-            <FitText className="text-sm md:text-base lg:text-lg">
-              {formatCurrency(amortizationSchedule[0]?.monthlyPayment || 0)}
-            </FitText>
-          </div>
+              <div
+                ref={resultsRef}
+                className="animate-fade-up scroll-mt-20 lg:sticky lg:top-24 lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1"
+                style={{ animationDelay: '440ms' }}
+              >
+                <ResultsCard sim={sim} eaPct={eaPct} rates={rates} onDownload={handleDownload} />
+              </div>
 
-          {/* Número de pagos */}
-          <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center min-h-[80px]">
-            <p className="text-sm md:text-base opacity-80 mb-1">Número de pagos:</p>
-            <FitText className="text-lg md:text-xl lg:text-2xl">
-              {amortizationSchedule.length}
-            </FitText>
-          </div>
-
-          {/* Interés Total Pagado */}
-          <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center min-h-[80px]">
-            <p className="text-sm md:text-base opacity-80 mb-1">Interés Total Pagado:</p>
-            <FitText className="text-sm md:text-base lg:text-lg">
-              {formatCurrency(amortizationSchedule.reduce((sum, row) => sum + row.interestPayment, 0))}
-            </FitText>
-          </div>
-
-          {/* Interés Total Ahorrado */}
-          <div className="bg-green-600 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center min-h-[80px]">
-            <p className="text-sm md:text-base opacity-80 mb-1">Interés Total Ahorrado:</p>
-            <FitText className="text-sm md:text-base lg:text-lg">
-              {formatCurrency(totalInterestSaved)}
-            </FitText>
-          </div>
-
-          {/* Monto Original */}
-          <div className="bg-blue-700 p-3 md:p-4 rounded-lg text-white shadow-md flex flex-col justify-center min-h-[80px]">
-            <p className="text-sm md:text-base opacity-80 mb-1">Monto Original:</p>
-            <FitText className="text-sm md:text-base lg:text-lg">
-              {formatCurrency(loanAmount)}
-            </FitText>
-          </div>
-
-        </div>
-      </div>
-
-      {/* Calculator Inputs and Extra Payments Section */}
-      <div className="flex flex-col lg:flex-row gap-6 md:gap-10 w-full max-w-5xl mx-auto mb-10">
-        {/* Main Calculator Inputs */}
-        <div className="bg-blue-100 p-8 md:p-10 rounded-3xl shadow-xl w-full lg:w-1/2 border border-blue-200">
-          <h2 className="text-xl md:text-2xl font-bold text-center text-gray-700 mb-6">Detalles del Préstamo</h2>
-          <div className="grid grid-cols-1 gap-6 md:gap-8 mb-6">
-            <div>
-              <label htmlFor="loanAmount" className="block text-gray-600 text-sm font-semibold mb-2">
-                Monto del Préstamo:
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-bold">$</span>
-                <input
-                  type="text"
-                  id="loanAmount"
-                  className="w-full pl-8 pr-4 py-2 border border-blue-300 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-gray-800 text-right"
-                  value={displayLoanAmount}
-                  onChange={(e) => {
-                    const rawValue = e.target.value;
-                    setDisplayLoanAmount(rawValue);
-                    const cleanNum = cleanNumberInput(rawValue);
-                    setLoanAmount(cleanNum !== '' ? parseFloat(cleanNum) : 0);
-                  }}
-                  onBlur={() => {
-                    if (typeof loanAmount === 'number' && !isNaN(loanAmount)) {
-                      setDisplayLoanAmount(new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(loanAmount));
-                    } else {
-                      setDisplayLoanAmount('');
-                    }
-                  }}
-                  inputMode="numeric"
-                  pattern="[0-9,]*"
+              <div ref={extrasRef} className="lg:col-span-7 lg:col-start-1 lg:row-start-2">
+                <ExtraPayments
+                  extraPayments={extraPayments}
+                  onAdd={(ep) => setExtraPayments((prev) => [...prev, ep])}
+                  onRemove={(id) => setExtraPayments((prev) => prev.filter((ep) => ep.id !== id))}
+                  maxMonth={months}
+                  appliedMonths={appliedMonths}
                 />
               </div>
             </div>
-            <div>
-              <label htmlFor="annualInterestRate" className="block text-gray-600 text-sm font-semibold mb-2">
-                Tasa Efectiva Anual (TEA) en %:
-              </label>
-              <input
-                type="number"
-                id="annualInterestRate"
-                className="w-full px-4 py-2 border border-blue-300 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-gray-800"
-                value={annualInterestRate}
-                onChange={(e) => setAnnualInterestRate(e.target.value)}
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <div>
-              <label htmlFor="loanTerm" className="block text-gray-600 text-sm font-semibold mb-2">
-                Plazo:
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  id="loanTerm"
-                  className="w-full px-4 py-2 border border-blue-300 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-gray-800"
-                  value={loanTerm}
-                  onChange={(e) => setLoanTerm(e.target.value)}
-                  min="1"
-                />
-                <select
-                  id="loanTermUnit"
-                  className="px-3 py-2 border border-blue-300 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-gray-800"
-                  value={loanTermUnit}
-                  onChange={(e) => setLoanTermUnit(e.target.value)}
-                >
-                  <option value="years">Años</option>
-                  <option value="months">Meses</option>
-                </select>
+
+            {deferredSim && (
+              <div className="mt-4 grid gap-4 lg:mt-6 lg:gap-6">
+                <PaymentsChart sim={deferredSim} />
+                <AmortizationTable sim={deferredSim} />
               </div>
-            </div>
+            )}
           </div>
-        </div>
+        </section>
 
-        {/* Extra Payments Section */}
-        <div className="bg-blue-100 p-8 md:p-10 rounded-3xl shadow-xl w-full lg:w-1/2 border border-blue-200">
-          <h2 className="text-xl md:text-2xl font-bold text-center text-gray-700 mb-6">Abonos Extraordinarios</h2>
-          <div className="grid grid-cols-1 gap-6 mb-6">
-            <div>
-              <label htmlFor="newExtraPaymentAmount" className="block text-gray-600 text-sm font-semibold mb-2">
-                Monto del Abono:
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-bold">$</span>
-                <input
-                  type="text"
-                  id="newExtraPaymentAmount"
-                  className="w-full pl-8 pr-4 py-2 border border-blue-300 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-gray-800 text-right"
-                  value={displayNewExtraPaymentAmount}
-                  onChange={(e) => {
-                    const rawValue = e.target.value;
-                    setDisplayNewExtraPaymentAmount(rawValue);
-                    const cleanNum = cleanNumberInput(rawValue);
-                    setNewExtraPaymentAmount(cleanNum !== '' ? parseFloat(cleanNum) : 0);
-                  }}
-                  onBlur={() => {
-                    if (typeof newExtraPaymentAmount === 'number' && !isNaN(newExtraPaymentAmount)) {
-                      setDisplayNewExtraPaymentAmount(new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(newExtraPaymentAmount));
-                    } else {
-                      setDisplayNewExtraPaymentAmount('');
-                    }
-                  }}
-                  inputMode="numeric"
-                  pattern="[0-9,]*"
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="newExtraPaymentMonth" className="block text-gray-600 text-sm font-semibold mb-2">
-                Mes en el que se realiza:
-              </label>
-              <input
-                type="number"
-                id="newExtraPaymentMonth"
-                className="w-full px-4 py-2 border border-blue-300 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-gray-800"
-                value={newExtraPaymentMonth}
-                onChange={(e) => setNewExtraPaymentMonth(e.target.value)}
-                min="1"
-              />
-            </div>
-            <button
-              onClick={handleAddExtraPayment}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300 active:bg-blue-800"
-            >
-              Agregar Abono
-            </button>
-          </div>
+        <HowItWorks />
+      </main>
 
-          {extraPayments.length > 0 && (
-            <div className="mt-6 border-t border-blue-200 pt-6">
-              <h3 className="text-lg font-semibold text-gray-700 mb-4">Abonos Agregados:</h3>
-              <ul className="space-y-3">
-                {extraPayments.map((ep) => (
-                  <li key={ep.id} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm border border-blue-100">
-                    <span className="text-gray-800 text-sm md:text-base">
-                      {formatCurrency(ep.amount)} en el Mes {ep.month}
-                    </span>
-                    <button
-                      onClick={() => handleRemoveExtraPayment(ep.id)}
-                      className="text-red-500 hover:text-red-700 transition-colors duration-200"
-                      aria-label={`Eliminar abono de ${formatCurrency(ep.amount)} en el Mes ${ep.month}`}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Amortization Chart */}
-      {amortizationSchedule.length > 0 && (
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-5xl mx-auto mb-10 border border-gray-100">
-          <h2 className="text-xl md:text-2xl font-bold text-center text-gray-700 mb-6">Visualización de los pagos mes a mes</h2>
-          <ResponsiveContainer width="100%" aspect={2}>
-            <BarChart
-              data={chartData}
-              margin={{ top: 25, right: 10, left: 10, bottom: 10 }}
-            >
-              <CartesianGrid stroke="rgba(148, 163, 184, 0.35)" strokeDasharray="2 6" vertical={false} />
-              <XAxis dataKey="month" />
-              <YAxis
-                tickFormatter={formatCurrency}
-                domain={[0, chartData.length > 0 ? Math.max(...chartData.map(item => (item['Pago a Capital (Regular)'] || 0) + (item['Pago de Interés'] || 0) + (item['Abono Extraordinario'] || 0))) * 1.1 : 'auto']}
-                width={100}
-              />
-              <Tooltip
-                formatter={(value, name) => [`${formatCurrency(value)}`, name]}
-                contentStyle={{ backgroundColor: '#ffffff', border: 'none', borderRadius: '14px', boxShadow: '0 18px 45px rgba(15, 23, 42, 0.12)' }}
-                labelStyle={{ color: '#0f172a', fontWeight: '600', fontSize: 13 }}
-              />
-              <Legend />
-              <Bar dataKey="Pago a Capital (Regular)" stackId="a" fill="#4299E1" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="Pago de Interés" stackId="a" fill="#81C784" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="Abono Extraordinario" stackId="a" fill="#FFA500" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Amortization Table */}
-      {amortizationSchedule.length > 0 && (
-        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-5xl mx-auto border border-gray-100">
-          <h2 className="text-xl md:text-2xl font-bold text-center text-gray-700 mb-6">Tabla de Amortización Detallada</h2>
-          <div className="overflow-x-auto overflow-y-auto max-h-[500px] relative rounded-lg border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-100">
-              <thead className="bg-blue-700 text-white sticky top-0 z-10 shadow-sm">
-                <tr>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider rounded-tl-lg">Mes</th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Cuota Mensual</th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Intereses</th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Capital</th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider rounded-tr-lg">Saldo Restante</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {amortizationSchedule.map((row, index) => (
-                  <tr key={row.month} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${row.extraPaymentApplied ? 'bg-yellow-50 font-semibold border-l-4 border-yellow-500' : ''} hover:bg-blue-50 transition-colors duration-150`}>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {row.month}
-                      {row.extraPaymentApplied && (
-                        <span className="ml-2 px-2 py-0.5 text-xs font-bold text-yellow-800 bg-yellow-200 rounded-full">
-                          Abono {formatCurrency(row.extraPaymentApplied)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800">{formatCurrency(row.monthlyPayment)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800">{formatCurrency(row.interestPayment)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800">{formatCurrency(row.principalPayment)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800 font-semibold">{formatCurrency(row.remainingBalance)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <Footer />
+      <MobileSummaryBar visible={barVisible} sim={sim} onView={scrollToResults} />
     </div>
   );
 }
-
-export default App;
