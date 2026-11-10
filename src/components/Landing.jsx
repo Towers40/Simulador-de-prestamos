@@ -50,13 +50,9 @@ export function Hero() {
       </div>
 
       <div className="mx-auto max-w-3xl px-4 pb-10 pt-12 text-center sm:px-6 sm:pb-14 sm:pt-20">
-        <p className="inline-flex animate-fade-up items-center gap-2 rounded-full border border-brand-100 bg-white/70 px-3.5 py-1.5 text-xs font-medium text-brand-700 shadow-sm backdrop-blur">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden="true" />
-          Gratis · Sin registro · Resultados al instante
-        </p>
         <h1
-          className="mt-6 animate-fade-up text-balance text-[2.35rem] font-semibold leading-[1.05] tracking-[-0.03em] text-ink sm:text-6xl"
-          style={{ animationDelay: '80ms' }}
+          className="animate-fade-up text-balance text-[2.35rem] font-semibold leading-[1.05] tracking-[-0.03em] text-ink sm:text-6xl"
+          style={{ animationDelay: '40ms' }}
         >
           Conoce tu cuota antes de pedir tu préstamo
         </h1>

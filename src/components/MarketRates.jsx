@@ -1,24 +1,61 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { annuityPayment, monthlyRateFromEA } from '../lib/finance.js';
 import { formatCOP, formatDate, formatPct } from '../lib/format.js';
-import { MARKET_PRODUCTS, SOURCES, fetchMarketRates } from '../lib/market.js';
+import { MARKET_PRODUCTS, TOP_N, fetchMarketRates } from '../lib/market.js';
 import { Icon, Segmented } from './ui.jsx';
 
-const PREVIEW = 5;
-
 const timeFormatter = new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
-const shortDate = (iso) => {
-  const d = new Date(iso.slice(0, 10) + 'T00:00:00Z');
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
-};
+
+const initials = (name) =>
+  name
+    .replace(/\(.*?\)/g, '')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !/^(banco|de|del|la|las|los)$/i.test(w))
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('') || name.slice(0, 2).toUpperCase();
+
+function EntityLogo({ row, rank, best }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = row.logo && !failed;
+  return (
+    <span className="relative mt-0.5 h-11 w-11 shrink-0 self-start">
+      <span className="grid h-11 w-11 place-items-center overflow-hidden rounded-xl bg-white ring-1 ring-line">
+        {showImage ? (
+          <img
+            src={row.logo}
+            alt=""
+            width="44"
+            height="44"
+            loading="lazy"
+            decoding="async"
+            onError={() => setFailed(true)}
+            className="h-full w-full object-contain"
+          />
+        ) : (
+          <span className="text-sm font-semibold tracking-tight text-ink-soft" aria-hidden="true">
+            {initials(row.name)}
+          </span>
+        )}
+      </span>
+      <span
+        className={`absolute -bottom-1 -right-1 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10px] font-semibold tabular-nums ring-2 ${
+          best ? 'bg-brand-600 text-white ring-brand-50' : 'bg-field text-ink-muted ring-white'
+        }`}
+        aria-hidden="true"
+      >
+        {rank}
+      </span>
+    </span>
+  );
+}
 
 function SkeletonRows() {
   return (
     <ol className="mt-2 divide-y divide-line" aria-hidden="true">
-      {Array.from({ length: 4 }, (_, i) => (
+      {Array.from({ length: TOP_N }, (_, i) => (
         <li key={i} className="flex animate-pulse items-center gap-3 py-4">
-          <span className="h-7 w-7 rounded-full bg-field" />
+          <span className="h-11 w-11 rounded-xl bg-field" />
           <span className="flex-1 space-y-2">
             <span className="block h-3.5 w-2/5 rounded bg-field" />
             <span className="block h-3 w-1/4 rounded bg-field" />
@@ -61,18 +98,16 @@ function EntityRow({ row, index, kind, amount, months, currentPayment, days, onU
 
   const meta =
     kind === 'credit'
-      ? `${row.type} · ${row.credits.toLocaleString('es-CO')} ${row.credits === 1 ? 'crédito' : 'créditos'}`
-      : `${row.type} · último reporte ${shortDate(row.lastReport)}`;
+      ? `${row.type} · ${row.credits.toLocaleString('es-CO')} ${row.credits === 1 ? 'crédito' : 'créditos'} en la semana`
+      : row.type;
+
+  const applyLabel = row.direct ? (kind === 'credit' ? 'Solicitar' : 'Abrir CDT') : 'Sitio oficial';
+  const linkClass =
+    'inline-flex h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-xs font-semibold text-ink ring-1 ring-inset ring-line transition hover:ring-ink/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50';
 
   return (
-    <li className={`flex gap-3 py-4 ${best ? '-mx-3 rounded-2xl bg-brand-50/70 px-3' : ''}`}>
-      <span
-        className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold tabular-nums ${
-          best ? 'bg-brand-600 text-white' : 'bg-field text-ink-muted'
-        }`}
-      >
-        {index + 1}
-      </span>
+    <li className={`flex gap-3.5 py-4 ${best ? '-mx-3 rounded-2xl bg-brand-50/70 px-3' : ''}`}>
+      <EntityLogo row={row} rank={index + 1} best={best} />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -113,11 +148,15 @@ function EntityRow({ row, index, kind, amount, months, currentPayment, days, onU
               href={row.url}
               target="_blank"
               rel="noopener noreferrer"
-              title={`Abre el sitio oficial de ${row.name} en una pestaña nueva`}
-              aria-label={`Ir al sitio oficial de ${row.name} (se abre en una pestaña nueva)`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-xs font-semibold text-ink ring-1 ring-inset ring-line transition hover:ring-ink/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+              title={
+                row.direct
+                  ? `Abre la página del producto en el sitio oficial de ${row.name}`
+                  : `Abre el sitio oficial de ${row.name}`
+              }
+              aria-label={`${row.direct ? `${applyLabel} en` : 'Ir al sitio oficial de'} ${row.name} (se abre en una pestaña nueva)`}
+              className={linkClass}
             >
-              Sitio oficial
+              {applyLabel}
               <Icon name="external" className="h-3.5 w-3.5" strokeWidth={2} />
             </a>
           ) : (
@@ -127,7 +166,7 @@ function EntityRow({ row, index, kind, amount, months, currentPayment, days, onU
               rel="noopener noreferrer"
               title="Esta entidad aún no tiene un sitio verificado en el simulador"
               aria-label={`Buscar el sitio oficial de ${row.name} (se abre en una pestaña nueva)`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold text-ink-soft border border-dashed border-ink-muted/40 transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-dashed border-ink-muted/40 px-3.5 text-xs font-semibold text-ink-soft transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
             >
               Buscar sitio oficial
               <Icon name="external" className="h-3.5 w-3.5" strokeWidth={2} />
@@ -144,7 +183,6 @@ export function MarketRates({ amount, months, currentPayment, onUseRate }) {
   const [armed, setArmed] = useState(false);
   const [productId, setProductId] = useState('vivienda');
   const [variants, setVariants] = useState({});
-  const [expanded, setExpanded] = useState(false);
   const [reload, setReload] = useState(0);
   const [state, setState] = useState({ status: 'idle', data: null, error: null });
 
@@ -152,7 +190,7 @@ export function MarketRates({ amount, months, currentPayment, onUseRate }) {
   const variant =
     product.variants.find((v) => v.id === (variants[productId] ?? product.defaultVariant)) ?? product.variants[0];
 
-  // Se consulta la fuente cuando la sección se acerca a la pantalla.
+  // Las tasas se consultan cuando la sección se acerca a la pantalla.
   useEffect(() => {
     const node = sectionRef.current;
     if (!node) return undefined;
@@ -177,8 +215,8 @@ export function MarketRates({ amount, months, currentPayment, onUseRate }) {
       .then((data) => {
         if (!ignore) setState({ status: 'ready', data, error: null });
       })
-      .catch((err) => {
-        if (!ignore) setState((s) => ({ ...s, status: 'error', error: err instanceof TypeError ? null : err.message }));
+      .catch(() => {
+        if (!ignore) setState((s) => ({ ...s, status: 'error' }));
       });
     return () => {
       ignore = true;
@@ -187,36 +225,19 @@ export function MarketRates({ amount, months, currentPayment, onUseRate }) {
 
   const data = state.data;
   const sameSelection = data && data.kind === product.kind;
-  const rows = useMemo(() => (sameSelection ? data.rows : []), [sameSelection, data]);
-  const visible = expanded ? rows : rows.slice(0, PREVIEW);
-  const source = product.kind === 'deposit' ? SOURCES.deposit : SOURCES.credit;
+  const rows = useMemo(() => (sameSelection ? data.rows.slice(0, TOP_N) : []), [sameSelection, data]);
   const days = Number(variant.id) || 360;
-
-  const selectProduct = (id) => {
-    setProductId(id);
-    setExpanded(false);
-  };
 
   return (
     <section ref={sectionRef} id="mercado" className="card scroll-mt-24 p-5 sm:p-7" aria-labelledby="mercado-title">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="max-w-xl">
-          <p className="eyebrow">Mercado</p>
-          <h2 id="mercado-title" className="mt-1.5 text-xl font-semibold tracking-tight text-ink sm:text-2xl">
-            Tasas reales de bancos y entidades
-          </h2>
-          <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-            Compara lo que cobra (o paga) cada entidad según sus propios reportes a la Superintendencia Financiera. Toca una
-            tasa para simularla o ve directo al sitio oficial.
-          </p>
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-2 self-start rounded-full bg-save-soft px-3 py-1.5 text-xs font-medium text-save">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-save/50 motion-reduce:hidden" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-save" />
-          </span>
-          Datos oficiales en vivo
-        </span>
+      <div className="max-w-xl">
+        <p className="eyebrow">Mercado</p>
+        <h2 id="mercado-title" className="mt-1.5 text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+          Las mejores tasas del mercado
+        </h2>
+        <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+          Las {TOP_N} entidades con mejor tasa en cada producto. Simula cualquiera o solicítala directo en la entidad.
+        </p>
       </div>
 
       {/* Productos */}
@@ -230,7 +251,7 @@ export function MarketRates({ amount, months, currentPayment, onUseRate }) {
                 type="button"
                 aria-pressed={active}
                 onClick={(e) => {
-                  selectProduct(p.id);
+                  setProductId(p.id);
                   e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
                 }}
                 className={`h-10 whitespace-nowrap rounded-full px-4 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
@@ -251,60 +272,40 @@ export function MarketRates({ amount, months, currentPayment, onUseRate }) {
             size="sm"
             label={product.kind === 'deposit' ? 'Plazo del CDT' : 'Tipo de vivienda'}
             value={variant.id}
-            onChange={(v) => {
-              setVariants((prev) => ({ ...prev, [productId]: v }));
-              setExpanded(false);
-            }}
+            onChange={(v) => setVariants((prev) => ({ ...prev, [productId]: v }))}
             options={product.variants.map((v) => ({ value: v.id, label: v.label }))}
           />
         )}
       </div>
 
-      {/* Estado / frescura */}
-      <div className="mt-4 rounded-2xl bg-field/70 px-4 py-3 text-xs leading-relaxed text-ink-muted" aria-live="polite">
-        {state.status === 'loading' && !sameSelection && 'Consultando la Superintendencia Financiera…'}
+      {/* Fecha de las tasas */}
+      <p className="mt-4 flex items-center gap-1.5 text-xs text-ink-muted" aria-live="polite">
+        <Icon name="calendar" className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
         {state.status === 'idle' && 'Las tasas se cargan al llegar a esta sección.'}
+        {state.status === 'loading' && !sameSelection && 'Buscando las mejores tasas…'}
         {sameSelection && (
-          <>
-            {data.kind === 'credit' ? (
-              <>
-                Semana con corte al <strong className="font-semibold text-ink">{formatDate(data.date)}</strong> · la
-                fuente se actualiza cada semana · mínimo {data.minCredits} créditos por entidad.
-              </>
-            ) : (
-              <>
-                Promedio de los últimos 7 días, al <strong className="font-semibold text-ink">{formatDate(data.date)}</strong>{' '}
-                · la fuente se actualiza a diario.
-              </>
-            )}{' '}
-            Consultado hoy a las {timeFormatter.format(data.fetchedAt)}.
-          </>
+          <span>
+            {data.kind === 'credit' ? 'Tasas de la semana al ' : 'Promedio de los últimos 7 días al '}
+            <strong className="font-semibold text-ink-soft">{formatDate(data.date)}</strong> · actualizado hoy a las{' '}
+            {timeFormatter.format(data.fetchedAt)}
+          </span>
         )}
-      </div>
+        {state.status === 'error' && !sameSelection && 'Sin conexión con las tasas.'}
+      </p>
 
       {state.status === 'error' && (
-        <div role="alert" className="mt-4 flex flex-col gap-3 rounded-2xl bg-danger-soft p-4 text-sm text-danger sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            No pudimos consultar la fuente oficial{state.error ? ` (${state.error})` : ''}. Revisa tu conexión e inténtalo de
-            nuevo.
-          </span>
-          <span className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setReload((n) => n + 1)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-xs font-semibold text-ink ring-1 ring-line"
-            >
-              <Icon name="refresh" className="h-3.5 w-3.5" strokeWidth={2} /> Reintentar
-            </button>
-            <a
-              href={source.page}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold text-danger ring-1 ring-danger/30"
-            >
-              Ver la fuente <Icon name="external" className="h-3.5 w-3.5" strokeWidth={2} />
-            </a>
-          </span>
+        <div
+          role="alert"
+          className="mt-4 flex flex-col gap-3 rounded-2xl bg-danger-soft p-4 text-sm text-danger sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span>No pudimos cargar las tasas en este momento. Revisa tu conexión e inténtalo de nuevo.</span>
+          <button
+            type="button"
+            onClick={() => setReload((n) => n + 1)}
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 self-start rounded-full bg-white px-3.5 text-xs font-semibold text-ink ring-1 ring-line sm:self-auto"
+          >
+            <Icon name="refresh" className="h-3.5 w-3.5" strokeWidth={2} /> Reintentar
+          </button>
         </div>
       )}
 
@@ -317,7 +318,7 @@ export function MarketRates({ amount, months, currentPayment, onUseRate }) {
             <p className="py-8 text-center text-sm text-ink-muted">No hay entidades con datos suficientes esta semana.</p>
           )}
           <ol className="mt-2 divide-y divide-line">
-            {visible.map((row, i) => (
+            {rows.map((row, i) => (
               <EntityRow
                 key={row.key}
                 row={row}
@@ -331,54 +332,15 @@ export function MarketRates({ amount, months, currentPayment, onUseRate }) {
               />
             ))}
           </ol>
-          {rows.length > PREVIEW && (
-            <button
-              type="button"
-              onClick={() => setExpanded((e) => !e)}
-              aria-expanded={expanded}
-              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-field text-sm font-semibold text-ink transition hover:bg-line/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
-            >
-              {expanded ? 'Mostrar menos' : `Ver las ${rows.length} entidades`}
-              <Icon name="chevronDown" className={`h-4 w-4 transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`} />
-            </button>
-          )}
         </div>
       )}
 
-      {/* Verificación */}
-      <div className="mt-6 space-y-3 border-t border-line pt-5 text-xs leading-relaxed text-ink-muted">
-        <p>
-          <strong className="font-semibold text-ink-soft">Fuente:</strong> Superintendencia Financiera de Colombia, conjunto
-          “{source.name}” en datos.gov.co. Las cifras se consultan en vivo cada vez que abres la página; no son valores
-          escritos a mano.
-        </p>
-        <p className="flex flex-wrap gap-2">
-          <a
-            href={source.page}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full bg-field px-3 py-1.5 font-medium text-ink-soft transition hover:text-ink"
-          >
-            Ver conjunto de datos <Icon name="external" className="h-3.5 w-3.5" strokeWidth={2} />
-          </a>
-          {sameSelection && (
-            <a
-              href={data.queryUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full bg-field px-3 py-1.5 font-medium text-ink-soft transition hover:text-ink"
-            >
-              Ver la consulta exacta <Icon name="external" className="h-3.5 w-3.5" strokeWidth={2} />
-            </a>
-          )}
-        </p>
-        <p>
-          {product.kind === 'credit'
-            ? 'Son tasas promedio ponderadas de los créditos que cada entidad desembolsó a personas en esa semana, no ofertas personalizadas: tu tasa depende de tu perfil, plazo, monto y garantías.'
-            : 'Son tasas promedio ponderadas de los CDT emitidos por cada entidad en el periodo; la rentabilidad real depende del monto, el plazo y la retención en la fuente.'}{' '}
-          Confirma siempre las condiciones con la entidad antes de decidir.
-        </p>
-      </div>
+      <p className="mt-5 border-t border-line pt-4 text-xs leading-relaxed text-ink-muted">
+        {product.kind === 'credit'
+          ? 'Son tasas promedio de lo que cada entidad prestó esa semana; la tuya depende de tu perfil, plazo y monto.'
+          : 'Son tasas promedio de los CDT emitidos; tu rentabilidad depende del monto, el plazo y la retención en la fuente.'}{' '}
+        Confirma las condiciones con la entidad antes de decidir.
+      </p>
     </section>
   );
 }
