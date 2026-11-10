@@ -5,6 +5,7 @@ const NAV_LINKS = [
   { href: '#simulador', label: 'Simulador' },
   { href: '#graficos', label: 'Gráfico' },
   { href: '#tabla', label: 'Tabla' },
+  { href: '#mercado', label: 'Bancos' },
   { href: '#como-funciona', label: 'Cómo funciona' },
 ];
 
@@ -63,8 +64,8 @@ export function Hero() {
           className="mx-auto mt-5 max-w-xl animate-fade-up text-pretty text-base leading-relaxed text-ink-soft sm:text-lg"
           style={{ animationDelay: '160ms' }}
         >
-          Calcula tu cuota mensual, convierte la tasa E.A. a N.M.V. y descubre cuánto ahorras con abonos
-          extraordinarios.
+          Calcula tu cuota mensual, convierte entre tasas E.A., N.M.V. y mensual, descubre cuánto ahorras con abonos y
+          compara las tasas reales de los bancos.
         </p>
         <div
           className="mt-8 flex animate-fade-up flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center"
@@ -90,8 +91,8 @@ export function Hero() {
         >
           {[
             { icon: 'zap', label: 'Cálculo en vivo' },
-            { icon: 'percent', label: 'E.A. → N.M.V.' },
-            { icon: 'file', label: 'Descarga en PDF' },
+            { icon: 'percent', label: 'E.A. ⇄ N.M.V. ⇄ M.V.' },
+            { icon: 'bank', label: 'Tasas de bancos' },
           ].map((f) => (
             <li key={f.label} className="flex flex-col items-center gap-2">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-brand-600 shadow-sm ring-1 ring-line/80">
@@ -109,8 +110,8 @@ export function Hero() {
 const STEPS = [
   {
     icon: 'percent',
-    title: 'De E.A. a N.M.V.',
-    body: 'Convertimos tu tasa efectiva anual en su equivalente nominal mes vencido, la que suelen mostrar los bancos.',
+    title: 'E.A., N.M.V. y mensual',
+    body: 'Escribe la tasa como te la dio el banco y calculamos sus equivalentes. Para comparar ofertas, fíjate siempre en la E.A.',
     formula: 'N.M.V. = 12 × [(1 + E.A.)^(1/12) − 1]',
   },
   {

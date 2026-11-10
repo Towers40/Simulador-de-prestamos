@@ -1,5 +1,13 @@
-import { formatCompactCOP, formatCOP, formatInteger, formatPct, parseIntegerInput, toDecimalInput } from '../lib/format.js';
-import { Icon, InputShell, RangeSlider, Segmented, inputClass } from './ui.jsx';
+import { useState } from 'react';
+import {
+  formatCompactCOP,
+  formatCOP,
+  formatInteger,
+  formatPct,
+  parseIntegerInput,
+  toDecimalInput,
+} from '../lib/format.js';
+import { InfoButton, InfoPanel, InputShell, RangeSlider, Segmented, inputClass } from './ui.jsx';
 
 export const AMOUNT_MIN = 500_000;
 export const AMOUNT_MAX = 500_000_000;
@@ -18,6 +26,8 @@ const sliderToAmount = (position) => {
   return Math.min(AMOUNT_MAX, Math.max(AMOUNT_MIN, Math.round(raw / step) * step));
 };
 
+const cleanRate = (value) => value.replace(/[^0-9.,]/g, '').slice(0, 7);
+
 function Field({ id, label, hint, children }) {
   return (
     <div className="space-y-2.5">
@@ -32,19 +42,126 @@ function Field({ id, label, hint, children }) {
   );
 }
 
+/** Explicaciones en lenguaje sencillo, con ejemplos calculados con los datos del usuario. */
+function RateExplanation({ kind, rates, amount }) {
+  const ok = Number.isFinite(rates.eaPct);
+  const ea = ok ? formatPct(rates.eaPct) : '—';
+  const nmv = ok ? formatPct(rates.nominalMonthlyPct) : '—';
+  const mv = ok ? `${toDecimalInput(rates.monthlyPct, 4)} %` : '—';
+  const base = amount > 0 ? amount : 1_000_000;
+
+  if (kind === 'ea') {
+    return (
+      <>
+        <p>
+          Es lo que <strong className="font-semibold text-ink">realmente te cuesta</strong> el préstamo en un año, porque ya
+          incluye que cada mes se cobran intereses sobre lo que debes.
+        </p>
+        <p>
+          Es la mejor tasa para <strong className="font-semibold text-ink">comparar créditos entre bancos</strong>: entre más
+          baja, más barato.
+        </p>
+        {ok && (
+          <p className="rounded-xl bg-field px-3 py-2 text-xs">
+            Ejemplo: con {ea} E.A., una deuda de $ 1.000.000 que no abonas en todo un año genera unos{' '}
+            <strong className="font-semibold text-ink">{formatCOP(rates.eaPct * 10_000)}</strong> de intereses.
+          </p>
+        )}
+      </>
+    );
+  }
+  if (kind === 'nmv') {
+    return (
+      <>
+        <p>
+          Es la tasa mensual <strong className="font-semibold text-ink">multiplicada por 12</strong>. Muchos bancos la
+          publican porque se ve más baja que la E.A.
+        </p>
+        <p>
+          No es el costo real del crédito: no tiene en cuenta que los intereses se cobran mes a mes. Sirve para calcular la
+          tasa mensual, no para comparar ofertas.
+        </p>
+        {ok && (
+          <p className="rounded-xl bg-field px-3 py-2 text-xs">
+            Ejemplo: {nmv} N.M.V. ÷ 12 = {mv} cada mes, que equivale a{' '}
+            <strong className="font-semibold text-ink">{ea} E.A.</strong>
+          </p>
+        )}
+      </>
+    );
+  }
+  return (
+    <>
+      <p>
+        Es el porcentaje de interés que te cobran <strong className="font-semibold text-ink">cada mes</strong> sobre lo que
+        todavía debes.
+      </p>
+      <p>“Mes vencido” significa que ese interés se paga al final del mes, junto con tu cuota.</p>
+      {ok && (
+        <p className="rounded-xl bg-field px-3 py-2 text-xs">
+          Ejemplo: con {mv} mensual y una deuda de {formatCOP(base)}, el primer mes pagas{' '}
+          <strong className="font-semibold text-ink">{formatCOP((base * rates.monthlyPct) / 100)}</strong> de intereses.
+        </p>
+      )}
+    </>
+  );
+}
+
+const INFO_TITLES = {
+  ea: '¿Qué es la tasa efectiva anual (E.A.)?',
+  nmv: '¿Qué es la tasa nominal mes vencido (N.M.V.)?',
+  mv: '¿Qué es la tasa mensual (M.V.)?',
+};
+
+function SmallRateField({ id, label, value, onChange, invalid, info, infoOpen, onInfoToggle }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center justify-between gap-1 px-1">
+        <label htmlFor={id} className="truncate text-xs font-medium text-brand-700">
+          {label}
+        </label>
+        <InfoButton open={infoOpen} onToggle={onInfoToggle} controls={`info-${info}`} label={INFO_TITLES[info]} />
+      </div>
+      <div
+        className={`mt-1.5 flex h-12 items-center gap-1 rounded-xl bg-white px-3 ring-1 transition focus-within:ring-2 ${
+          invalid ? 'ring-danger/60' : 'ring-brand-100 focus-within:ring-brand-500/50'
+        }`}
+      >
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          className="w-full min-w-0 flex-1 bg-transparent text-lg font-semibold tracking-tight text-ink outline-none placeholder:font-normal placeholder:text-ink-muted/60"
+          value={value}
+          placeholder="0"
+          onChange={(e) => onChange(cleanRate(e.target.value))}
+        />
+        <span className="text-sm font-medium text-ink-muted">%</span>
+      </div>
+    </div>
+  );
+}
+
 export function LoanInputs({
   amount,
   onAmountChange,
-  rateInput,
-  onRateInputChange,
-  eaPct,
+  rate,
+  onRateChange,
   rates,
   termInput,
   onTermInputChange,
   termUnit,
   onTermUnitChange,
 }) {
-  const rateValid = Number.isFinite(eaPct) && eaPct >= 0;
+  const [info, setInfo] = useState(null);
+  const toggleInfo = (kind) => setInfo((current) => (current === kind ? null : kind));
+
+  const ratesValid = Number.isFinite(rates.eaPct);
+  // El campo que el usuario está escribiendo muestra su texto; los otros, el valor equivalente.
+  const display = (field, value, digits) => (rate.source === field ? rate.text : ratesValid ? toDecimalInput(value, digits) : '');
+  const invalid = (field) => rate.source === field && !ratesValid;
+
   const termNumber = parseInt(termInput, 10);
   const termValid = Number.isInteger(termNumber) && termNumber > 0;
   const termMax = termUnit === 'years' ? 30 : 360;
@@ -88,53 +205,73 @@ export function LoanInputs({
         </div>
       </Field>
 
-      {/* Tasa E.A. + equivalencia N.M.V. */}
-      <Field id="rate" label="Tasa efectiva anual (E.A.)">
-        <InputShell suffix="% E.A." invalid={!rateValid}>
+      {/* Tasas: E.A. ⇄ N.M.V. ⇄ M.V. */}
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="rate-ea" className="text-sm font-medium text-ink-soft">
+            Tasa efectiva anual (E.A.)
+          </label>
+          <InfoButton open={info === 'ea'} onToggle={() => toggleInfo('ea')} controls="info-ea" label={INFO_TITLES.ea} />
+        </div>
+        <InfoPanel id="info-ea" open={info === 'ea'} title={INFO_TITLES.ea} onClose={() => setInfo(null)}>
+          <RateExplanation kind="ea" rates={rates} amount={amount} />
+        </InfoPanel>
+        <InputShell suffix="% E.A." invalid={invalid('ea')}>
           <input
-            id="rate"
+            id="rate-ea"
             type="text"
             inputMode="decimal"
             autoComplete="off"
             className={inputClass}
-            value={rateInput}
+            value={display('ea', rates.eaPct, 2)}
             placeholder="0"
-            onChange={(e) => onRateInputChange(e.target.value.replace(/[^0-9.,]/g, '').slice(0, 6))}
+            onChange={(e) => onRateChange({ source: 'ea', text: cleanRate(e.target.value) })}
           />
         </InputShell>
         <RangeSlider
           min={0}
           max={RATE_MAX_SLIDER}
           step={0.1}
-          value={rateValid ? eaPct : 0}
-          onChange={(v) => onRateInputChange(toDecimalInput(v))}
+          value={ratesValid ? rates.eaPct : 0}
+          onChange={(v) => onRateChange({ source: 'ea', text: toDecimalInput(v) })}
           label="Ajustar tasa efectiva anual"
-          valueText={rateValid ? formatPct(eaPct) : 'Sin tasa'}
+          valueText={ratesValid ? formatPct(rates.eaPct) : 'Sin tasa'}
         />
 
-        <div
-          className="grid grid-cols-2 overflow-hidden rounded-2xl bg-brand-50 ring-1 ring-brand-100"
-          aria-live="polite"
-        >
-          <div className="p-4">
-            <p className="flex items-center gap-1.5 text-xs font-medium text-brand-700">
-              <Icon name="percent" className="h-3.5 w-3.5" strokeWidth={2} />
-              Tasa N.M.V.
-            </p>
-            <p className="mt-1 text-xl font-semibold tracking-tight text-ink">
-              {rateValid ? formatPct(rates.nominalMonthlyPct) : '—'}
-            </p>
-            <p className="mt-0.5 text-[11px] leading-snug text-ink-muted">Nominal mes vencido</p>
+        <div className="rounded-2xl bg-brand-50 p-3 ring-1 ring-inset ring-brand-100">
+          <p className="px-1 pb-3 text-xs leading-snug text-ink-muted">
+            Equivalencias: escribe en cualquiera de las tres tasas y las demás se ajustan solas.
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            <SmallRateField
+              id="rate-nmv"
+              label="Nominal (N.M.V.)"
+              value={display('nmv', rates.nominalMonthlyPct, 2)}
+              onChange={(text) => onRateChange({ source: 'nmv', text })}
+              invalid={invalid('nmv')}
+              info="nmv"
+              infoOpen={info === 'nmv'}
+              onInfoToggle={() => toggleInfo('nmv')}
+            />
+            <SmallRateField
+              id="rate-mv"
+              label="Mensual (M.V.)"
+              value={display('mv', rates.monthlyPct, 4)}
+              onChange={(text) => onRateChange({ source: 'mv', text })}
+              invalid={invalid('mv')}
+              info="mv"
+              infoOpen={info === 'mv'}
+              onInfoToggle={() => toggleInfo('mv')}
+            />
           </div>
-          <div className="border-l border-brand-100 p-4">
-            <p className="text-xs font-medium text-brand-700">Tasa mensual</p>
-            <p className="mt-1 text-xl font-semibold tracking-tight text-ink">
-              {rateValid ? formatPct(rates.monthlyPct, 3) : '—'}
-            </p>
-            <p className="mt-0.5 text-[11px] leading-snug text-ink-muted">Mes vencido (M.V.)</p>
-          </div>
+          <InfoPanel id="info-nmv" open={info === 'nmv'} title={INFO_TITLES.nmv} onClose={() => setInfo(null)}>
+            <RateExplanation kind="nmv" rates={rates} amount={amount} />
+          </InfoPanel>
+          <InfoPanel id="info-mv" open={info === 'mv'} title={INFO_TITLES.mv} onClose={() => setInfo(null)}>
+            <RateExplanation kind="mv" rates={rates} amount={amount} />
+          </InfoPanel>
         </div>
-      </Field>
+      </div>
 
       {/* Plazo */}
       <Field id="term" label="Plazo" hint={termValid && termUnit === 'years' ? `${months} meses` : null}>

@@ -22,6 +22,25 @@ export const rateEquivalences = (eaPct) => {
   return { monthlyPct: monthly * 100, nominalMonthlyPct: monthly * 12 * 100 };
 };
 
+/**
+ * Las tres tasas a partir de la que escribió el usuario.
+ *  - source 'ea':  tasa efectiva anual (E.A.)
+ *  - source 'nmv': tasa nominal anual mes vencido (N.M.V.) = 12 × M.V.
+ *  - source 'mv':  tasa periódica mensual (mes vencido)
+ */
+export const ratesFromInput = (source, value) => {
+  if (!Number.isFinite(value) || value < 0) {
+    return { eaPct: NaN, monthlyPct: NaN, nominalMonthlyPct: NaN };
+  }
+  let monthly;
+  if (source === 'mv') monthly = value / 100;
+  else if (source === 'nmv') monthly = value / 1200;
+  else monthly = monthlyRateFromEA(value);
+
+  const eaPct = source === 'ea' ? value : (Math.pow(1 + monthly, 12) - 1) * 100;
+  return { eaPct, monthlyPct: monthly * 100, nominalMonthlyPct: monthly * 1200 };
+};
+
 /** Cuota fija mensual. */
 export const annuityPayment = (principal, monthlyRate, months) => {
   if (monthlyRate === 0) return principal / months;

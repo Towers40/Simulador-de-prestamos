@@ -1,23 +1,26 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { rateEquivalences, simulateLoan } from './lib/finance.js';
-import { parseDecimal } from './lib/format.js';
+import { ratesFromInput, simulateLoan } from './lib/finance.js';
+import { parseDecimal, toDecimalInput } from './lib/format.js';
 import { downloadAmortizationPDF } from './lib/pdf.js';
 import { LoanInputs } from './components/LoanInputs.jsx';
 import { ExtraPayments } from './components/ExtraPayments.jsx';
 import { ResultsCard } from './components/ResultsCard.jsx';
 import { PaymentsChart } from './components/PaymentsChart.jsx';
 import { AmortizationTable } from './components/AmortizationTable.jsx';
+import { MarketRates } from './components/MarketRates.jsx';
 import { Footer, Hero, HowItWorks, MobileSummaryBar, NavBar } from './components/Landing.jsx';
 
 export default function App() {
   const [amount, setAmount] = useState(10_000_000);
-  const [rateInput, setRateInput] = useState('18');
+  // La tasa que el usuario escribió (E.A., N.M.V. o M.V.); las otras dos se derivan.
+  const [rate, setRate] = useState({ source: 'ea', text: '18' });
   const [termInput, setTermInput] = useState('5');
   const [termUnit, setTermUnit] = useState('years');
   const [extraPayments, setExtraPayments] = useState([]);
 
-  const eaPct = parseDecimal(rateInput);
-  const rates = useMemo(() => rateEquivalences(eaPct), [eaPct]);
+  const rateValue = parseDecimal(rate.text);
+  const rates = useMemo(() => ratesFromInput(rate.source, rateValue), [rate.source, rateValue]);
+  const eaPct = rates.eaPct;
   const termNumber = parseInt(termInput, 10);
   const months =
     Number.isInteger(termNumber) && termNumber > 0 ? (termUnit === 'years' ? termNumber * 12 : termNumber) : 0;
@@ -58,6 +61,11 @@ export default function App() {
     resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
+  const applyMarketRate = useCallback((eaRate) => {
+    setRate({ source: 'ea', text: toDecimalInput(eaRate) });
+    document.getElementById('simulador')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   const handleDownload = () =>
     downloadAmortizationPDF({ sim, eaPct, rates, termValue: termNumber, termUnit, extraPayments });
 
@@ -92,9 +100,8 @@ export default function App() {
                 <LoanInputs
                   amount={amount}
                   onAmountChange={setAmount}
-                  rateInput={rateInput}
-                  onRateInputChange={setRateInput}
-                  eaPct={eaPct}
+                  rate={rate}
+                  onRateChange={setRate}
                   rates={rates}
                   termInput={termInput}
                   onTermInputChange={setTermInput}
@@ -128,6 +135,15 @@ export default function App() {
                 <AmortizationTable sim={deferredSim} />
               </div>
             )}
+
+            <div className="mt-4 lg:mt-6">
+              <MarketRates
+                amount={amount}
+                months={months}
+                currentPayment={sim?.payment ?? NaN}
+                onUseRate={applyMarketRate}
+              />
+            </div>
           </div>
         </section>
 

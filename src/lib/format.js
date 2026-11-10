@@ -65,4 +65,12 @@ export const parseIntegerInput = (raw) => {
 };
 
 /** Muestra un decimal con coma, sin ceros sobrantes: 24.5 → "24,5" */
-export const toDecimalInput = (value) => String(Math.round(value * 100) / 100).replace('.', ',');
+export const toDecimalInput = (value, digits = 2) => {
+  if (!Number.isFinite(value)) return '';
+  const factor = Math.pow(10, digits);
+  return String(Math.round(value * factor) / factor).replace('.', ',');
+};
+
+/** Fecha en español: "30 de octubre de 2026" */
+const dateFormatter = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+export const formatDate = (iso) => (iso ? dateFormatter.format(new Date(iso.slice(0, 10) + 'T00:00:00Z')) : '');

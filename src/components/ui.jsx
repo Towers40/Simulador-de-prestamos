@@ -60,6 +60,10 @@ const paths = {
       <path d="M12 11v5.5M12 7.6v.1" />
     </>
   ),
+  bank: <path d="M3.5 9.5 12 4l8.5 5.5M5.5 10v7.5m4.33-7.5v7.5m4.34-7.5v7.5m4.33-7.5v7.5M3.5 20h17" />,
+  external: <path d="M14 4h6v6m0-6-8.5 8.5M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10" />,
+  refresh: <path d="M20 11a8 8 0 0 0-14.5-4.5M4 4v3.5h3.5M4 13a8 8 0 0 0 14.5 4.5M20 20v-3.5h-3.5" />,
+  sparkle: <path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.5l-1.8-5.9-5.7-1.8L10.2 9 12 3.5Z" />,
 };
 
 export function Icon({ name, className = 'h-5 w-5', strokeWidth = 1.75 }) {
@@ -186,6 +190,55 @@ export function InputShell({ prefix, suffix, children, invalid = false, classNam
 
 export const inputClass =
   'w-full min-w-0 flex-1 bg-transparent text-xl font-semibold tracking-tight text-ink outline-none placeholder:font-normal placeholder:text-ink-muted/60';
+
+/* ---------- Ayuda contextual "i" ---------- */
+export function InfoButton({ open, onToggle, controls, label }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-controls={controls}
+      aria-label={label}
+      title={label}
+      className={`-my-1 inline-grid h-7 w-7 shrink-0 place-items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
+        open ? 'bg-brand-600 text-white' : 'text-ink-muted hover:bg-brand-50 hover:text-brand-700'
+      }`}
+    >
+      <Icon name="info" className="h-[17px] w-[17px]" strokeWidth={2} />
+    </button>
+  );
+}
+
+/** Panel explicativo que se despliega en línea (sin tapar contenido en móvil). */
+export function InfoPanel({ id, open, title, children, onClose }) {
+  return (
+    <div className="collapsible" data-open={open}>
+      <div inert={!open}>
+        <div
+          id={id}
+          role="region"
+          aria-label={title}
+          onKeyDown={(e) => e.key === 'Escape' && onClose()}
+          className="mt-2.5 rounded-2xl bg-white p-4 text-sm leading-relaxed text-ink-soft ring-1 ring-inset ring-line"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className="font-semibold text-ink">{title}</p>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar explicación"
+              className="-m-1 grid h-7 w-7 shrink-0 place-items-center rounded-full text-ink-muted transition hover:bg-field hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+            >
+              <Icon name="close" className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </div>
+          <div className="mt-1.5 space-y-2">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Pequeña muestra de color para leyendas (rect = barras/áreas, line = líneas). */
 export function Swatch({ color, shape = 'rect' }) {
