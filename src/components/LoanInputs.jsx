@@ -13,6 +13,8 @@ export const AMOUNT_MIN = 500_000;
 export const AMOUNT_MAX = 500_000_000;
 const AMOUNT_LIMIT = 99_999_999_999;
 const RATE_MAX_SLIDER = 60;
+// Plazos frecuentes como accesos rápidos (cualquier otro se escribe en el campo).
+const TERM_PRESETS = { years: [1, 2, 3, 5, 10, 15, 20], months: [6, 12, 18, 24, 36, 48, 60] };
 
 // Slider logarítmico: mismo recorrido para $1 M → $10 M que para $50 M → $500 M.
 const LOG_RANGE = Math.log(AMOUNT_MAX / AMOUNT_MIN);
@@ -164,7 +166,6 @@ export function LoanInputs({
 
   const termNumber = parseInt(termInput, 10);
   const termValid = Number.isInteger(termNumber) && termNumber > 0;
-  const termMax = termUnit === 'years' ? 30 : 360;
   const months = termValid ? (termUnit === 'years' ? termNumber * 12 : termNumber) : 0;
 
   const changeUnit = (unit) => {
@@ -299,19 +300,25 @@ export function LoanInputs({
             ]}
           />
         </div>
-        <RangeSlider
-          min={1}
-          max={termMax}
-          value={termValid ? termNumber : 1}
-          onChange={(v) => onTermInputChange(String(v))}
-          label="Ajustar plazo"
-          valueText={termValid ? `${termNumber} ${termUnit === 'years' ? 'años' : 'meses'}` : 'Sin plazo'}
-        />
-        <div className="flex justify-between text-xs text-ink-muted">
-          <span>1 {termUnit === 'years' ? 'año' : 'mes'}</span>
-          <span>
-            {termMax} {termUnit === 'years' ? 'años' : 'meses'}
-          </span>
+        <div className="-mx-1 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex w-max gap-2" role="group" aria-label="Plazos frecuentes">
+            {TERM_PRESETS[termUnit].map((v) => {
+              const active = termValid && termNumber === v;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => onTermInputChange(String(v))}
+                  className={`h-11 whitespace-nowrap rounded-full px-4 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
+                    active ? 'bg-white font-medium text-ink ring-2 ring-inset ring-brand-600' : 'bg-field text-ink-soft hover:bg-line/70 hover:text-ink'
+                  }`}
+                >
+                  {v} {termUnit === 'years' ? (v === 1 ? 'año' : 'años') : 'meses'}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </Field>
     </div>

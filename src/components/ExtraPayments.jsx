@@ -32,7 +32,7 @@ export function ExtraPayments({ extraPayments, onAdd, onRemove, maxMonth, applie
   const sorted = [...extraPayments].sort((a, b) => a.month - b.month || a.id - b.id);
 
   return (
-    <section className="card p-5 sm:p-7" aria-labelledby="abonos-title">
+    <section className="card p-6 sm:p-8" aria-labelledby="abonos-title">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -44,7 +44,7 @@ export function ExtraPayments({ extraPayments, onAdd, onRemove, maxMonth, applie
           <Icon name="coins" />
         </span>
         <span className="min-w-0 flex-1">
-          <span id="abonos-title" className="flex items-center gap-2 text-base font-semibold text-ink">
+          <span id="abonos-title" className="flex items-center gap-2 text-lg font-display tracking-[-0.01em] text-ink">
             Abonos extraordinarios
             {extraPayments.length > 0 && (
               <span className="rounded-full bg-extra-soft px-2 py-0.5 text-xs font-semibold text-extra-ink">

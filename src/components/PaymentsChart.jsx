@@ -216,11 +216,10 @@ export function PaymentsChart({ sim }) {
   const growStagger = Math.min(8, 360 / Math.max(1, periods.length));
 
   return (
-    <section id="graficos" className="card scroll-mt-24 p-5 sm:p-7" aria-labelledby="graficos-title">
+    <section id="graficos" className="card scroll-mt-24 p-6 sm:p-8" aria-labelledby="graficos-title">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="eyebrow">Visualización</p>
-          <h2 id="graficos-title" className="mt-1.5 text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+          <h2 id="graficos-title" className="title-3 sm:text-2xl">
             {view === 'payments' ? 'Así se reparten tus cuotas' : 'Así baja tu deuda'}
           </h2>
           <p className="mt-1 text-sm text-ink-muted">

@@ -23,11 +23,10 @@ export function AmortizationTable({ sim }) {
   const hasExtras = sim.totalExtra > 0;
 
   return (
-    <section id="tabla" className="card scroll-mt-24 p-5 sm:p-7" aria-labelledby="tabla-title">
+    <section id="tabla" className="card scroll-mt-24 p-6 sm:p-8" aria-labelledby="tabla-title">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="eyebrow">Detalle</p>
-          <h2 id="tabla-title" className="mt-1.5 text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+          <h2 id="tabla-title" className="title-3 sm:text-2xl">
             Tabla de amortización
           </h2>
           <p className="mt-1 text-sm text-ink-muted">

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
+/** Ilustraciones 3D (public/3d), renderizadas con scripts/3d. */
+export const img3d = (name) => `${import.meta.env.BASE_URL}3d/${name}.webp`;
+
 /* ---------- Logo (calculadora + moneda) ---------- */
 export function LogoMark({ className = 'h-8 w-8' }) {
   return (

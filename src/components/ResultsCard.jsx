@@ -46,9 +46,9 @@ export function ResultsCard({ sim, eaPct, rates, onDownload }) {
 
   return (
     <div className="card overflow-hidden">
-      <div className="bg-gradient-to-br from-brand-50 via-white to-white p-5 sm:p-7">
+      <div className="bg-gradient-to-b from-brand-50 to-white p-6 pb-5 sm:p-8 sm:pb-6">
         <p className="text-sm font-medium text-ink-soft">Tu cuota mensual</p>
-        <p className="mt-1 text-[clamp(2.4rem,11vw,3.4rem)] font-semibold leading-none tracking-tight text-ink">
+        <p className="mt-1 text-[clamp(2.5rem,11vw,3.5rem)] font-display leading-none tracking-[-0.03em] text-ink">
           <AnimatedNumber value={sim.payment} format={formatCOP} />
         </p>
         <p className="mt-3 text-sm text-ink-muted">
@@ -57,7 +57,7 @@ export function ResultsCard({ sim, eaPct, rates, onDownload }) {
         </p>
       </div>
 
-      <div className="space-y-6 p-5 pt-2 sm:p-7 sm:pt-2">
+      <div className="space-y-6 p-6 pt-2 sm:p-8 sm:pt-2">
         {/* Composición del total pagado */}
         <div>
           <div className="flex items-baseline justify-between gap-3">
@@ -117,7 +117,7 @@ export function ResultsCard({ sim, eaPct, rates, onDownload }) {
           type="button"
           onClick={download}
           disabled={pdfState === 'loading'}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-sm font-semibold text-white shadow-[0_8px_20px_-10px_rgba(15,117,99,0.7)] transition hover:bg-brand-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 focus-visible:ring-offset-2"
+          className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-base font-medium text-white transition hover:bg-brand-700 active:scale-[0.99] disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 focus-visible:ring-offset-2"
         >
           <Icon name="download" className="h-4 w-4" strokeWidth={2.25} />
           {pdfState === 'loading' ? 'Generando PDF…' : 'Descargar PDF'}

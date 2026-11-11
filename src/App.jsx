@@ -8,7 +8,7 @@ import { ResultsCard } from './components/ResultsCard.jsx';
 import { PaymentsChart } from './components/PaymentsChart.jsx';
 import { AmortizationTable } from './components/AmortizationTable.jsx';
 import { MarketRates } from './components/MarketRates.jsx';
-import { Footer, Hero, HowItWorks, MobileSummaryBar, NavBar } from './components/Landing.jsx';
+import { Footer, Hero, Highlights, HowItWorks, MobileSummaryBar, NavBar } from './components/Landing.jsx';
 
 export default function App() {
   const [amount, setAmount] = useState(10_000_000);
@@ -81,22 +81,20 @@ export default function App() {
 
       <main>
         <Hero />
+        <Highlights sim={deferredSim} />
 
-        <section id="simulador" className="scroll-mt-24 px-4 sm:px-6" aria-labelledby="simulador-title">
+        <section id="simulador" className="section scroll-mt-16 pt-0 sm:pt-0 lg:pt-0" aria-labelledby="simulador-title">
           <div className="mx-auto max-w-6xl">
-            <div className="grid items-start gap-4 lg:grid-cols-12 lg:gap-6">
-              <div
-                ref={inputsRef}
-                className="card animate-fade-up p-5 sm:p-7 lg:col-span-7 lg:col-start-1 lg:row-start-1"
-                style={{ animationDelay: '360ms' }}
-              >
-                <div className="mb-7">
-                  <p className="eyebrow">Simulador</p>
-                  <h2 id="simulador-title" className="mt-1.5 text-xl font-semibold tracking-tight text-ink sm:text-2xl">
-                    Datos del préstamo
-                  </h2>
-                  <p className="mt-1 text-sm text-ink-muted">Ajusta los valores: todo se recalcula al instante.</p>
-                </div>
+            <div className="max-w-2xl">
+              <h2 id="simulador-title" className="display-2">
+                Simula tu préstamo
+              </h2>
+              <p className="lead mt-5 max-w-lg">Ajusta el monto, la tasa y el plazo: todo se recalcula al instante.</p>
+            </div>
+
+            <div className="mt-12 grid grid-cols-1 items-start gap-4 sm:mt-16 lg:grid-cols-12 lg:gap-6">
+              <div ref={inputsRef} className="card p-6 sm:p-8 lg:col-span-7 lg:col-start-1 lg:row-start-1">
+                <h3 className="title-3 mb-8">Datos del préstamo</h3>
                 <LoanInputs
                   amount={amount}
                   onAmountChange={setAmount}
@@ -112,8 +110,7 @@ export default function App() {
 
               <div
                 ref={resultsRef}
-                className="animate-fade-up scroll-mt-20 lg:sticky lg:top-24 lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1"
-                style={{ animationDelay: '440ms' }}
+                className="scroll-mt-20 lg:sticky lg:top-24 lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1"
               >
                 <ResultsCard sim={sim} eaPct={eaPct} rates={rates} onDownload={handleDownload} />
               </div>
@@ -135,17 +132,10 @@ export default function App() {
                 <AmortizationTable sim={deferredSim} />
               </div>
             )}
-
-            <div className="mt-4 lg:mt-6">
-              <MarketRates
-                amount={amount}
-                months={months}
-                currentPayment={sim?.payment ?? NaN}
-                onUseRate={applyMarketRate}
-              />
-            </div>
           </div>
         </section>
+
+        <MarketRates amount={amount} months={months} currentPayment={sim?.payment ?? NaN} onUseRate={applyMarketRate} />
 
         <HowItWorks />
       </main>
